@@ -21,9 +21,11 @@ runtime packages, provider accounts, network calls or installation required.
 
     python3 tests/validate.py
 
-Step 42: website build/10 tests, discovery 24 existing + 12 security tests,
-24 existing + 12 security mutation checks, preserved baseline 18 tests/18 mutations,
-and 1 migration regression: 65 tests and 54 mutation checks total.
+Step 43A: eight-asset website build/15 tests, discovery 36 tests/36 mutations,
+preserved baseline 18 tests/18 mutations, one migration regression and eight UX
+mutations: 70 tests and 62 mutations caught. See the
+[launch readiness report](docs/ux/STEP43A-LAUNCH-READINESS.md).
+Browser acceptance and Cloudflare deployment remain blocked; not launched.
 
 ## Preview
 
@@ -46,8 +48,8 @@ cache outside this repository. Never point this pre-alpha at a private real vaul
 
 Step 41 review findings were fixed and regression-tested in Step 42; broader race,
 resource and production security acceptance remain open. Browser acceptance, native
-provider onboarding and safe install/uninstall remain release blockers. No remote is
-configured and nothing is published. See [roadmap](docs/roadmap/ROADMAP.md),
+provider onboarding and safe install/uninstall remain release blockers. The private
+source backup was verified by the owner in Step 42B; no website is deployed. See [roadmap](docs/roadmap/ROADMAP.md),
 [migration](docs/development/MIGRATION.md), [GitHub plan](docs/development/GITHUB-PLAN.md)
 and [license decision](LICENSE-DECISION.md).
 

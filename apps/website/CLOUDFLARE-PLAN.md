@@ -3,7 +3,7 @@
 ## Build and environment
 
 Build command: `npm run build` (Node 18+). Output directory: `dist`.
-Seven allowlisted static files only; no server functions, secrets, API keys or runtime
+Eight allowlisted static files only (homepage plus `guide.html`); no server functions, secrets, API keys or runtime
 environment variables. Do not upload this development directory or private engine
 archives. No package dependencies need installation.
 
@@ -60,3 +60,71 @@ ownership and HTTPS behavior are verified. No Cloudflare account settings were c
 - [Headers](https://developers.cloudflare.com/pages/configuration/headers/)
 - [Preview deployments](https://developers.cloudflare.com/pages/configuration/preview-deployments/)
 - [Custom domains](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+
+## Step 43A — concrete deployment proposal (NOT LAUNCHED)
+
+Website preview only. Local engine, private source/history, brain notes and provider
+configuration must never be uploaded. Suggested project `skeptic-os` is unconfirmed;
+no project, Cloudflare account or URL has been created/verified.
+
+| Setting | Proposed value |
+| --- | --- |
+| Approach | Direct Upload of the reviewed eight-asset build, preferably dashboard upload |
+| Project | `skeptic-os`, subject to availability and explicit approval |
+| Local build root | `apps/website` |
+| Local build command | `npm run build` |
+| Local output | `apps/website/dist` (or `dist` relative to build root) |
+| Framework/functions | None; static HTML/CSS/JS only |
+| Environment variables | None for build/runtime |
+| Authentication | Authorized Cloudflare dashboard session; account owner confirms account identity and target |
+| Automation alternative | Approved Wrangler installation/authentication, then account-scoped Pages Edit credentials; never place tokens in source |
+| Current access | No callable Cloudflare connector; `wrangler` absent; browser list empty. Account/permissions unknown |
+| GitHub access for Direct Upload | None needed; no commit/push required for upload |
+
+Direct Upload accepts prebuilt folders or ZIPs in the dashboard. Choose the project
+mode deliberately: a Direct Upload project cannot later switch to native Git
+integration without creating another project. See [Direct Upload docs](https://developers.cloudflare.com/pages/get-started/direct-upload/).
+
+Git integration is optional, not required here. It would grant the Cloudflare GitHub
+app selected-repository access and enable build triggers. This session authorizes
+neither app installation nor pushes. The existing plan favors an independently
+reviewed website-only repo; do not connect the private mixed engine repository
+without a separate access decision. If an approved website-only repository is used,
+set build root to that repo's website root, command `npm run build`, output `dist`.
+A selected monorepo would use root `apps/website`, command `npm run build`, output
+`dist`; only the built website may be served. Repository access is broader than the
+output allowlist. See [GitHub integration](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/).
+
+### Preview and production sequence — do not execute until gates pass
+
+1. Complete local manual browser acceptance at all five widths and obtain its
+   confirmation. Confirm deployment approach, exact Cloudflare account, project and
+   explicit public-upload approval. A Pages preview URL is also an external upload;
+   browser unavailability blocks it here.
+2. Upload only the reviewed eight assets. For a controlled nonproduction deployment,
+   choose preview environment/branch in an existing approved Direct Upload project.
+   Wrangler can explicitly select a preview branch distinct from the production
+   branch. Do not let implicit branch detection choose production.
+3. Inspect deployed response headers/CSP, both pages, scripts, all internal links,
+   downloads, onboarding and Network/Console. Python preview cannot validate hosted
+   headers. Any newly injected analytics must be disabled and investigated.
+4. Publish the accepted exact artifact to the approved production target only with
+   explicit production approval. Record the actual URL/deployment ID and hashes in
+   the canonical checkpoint. Do not promise `skeptic-os.pages.dev` until confirmed.
+
+### Rollback
+
+Keep the accepted ZIP/manifest and deployment IDs outside the served output.
+Subsequent production releases can roll back to a previous successful production
+ deployment through the Pages dashboard; preview deployments are not rollback
+ targets. For the first launch there is no previous production deployment: keep
+ production blocked until acceptance, and agree an unpublish/redeploy response
+ separately if needed. No rollback or project deletion is preauthorized.
+See [Rollbacks](https://developers.cloudflare.com/pages/configuration/rollbacks/).
+
+### Current gates
+
+Build/tests, static privacy review, truthful pre-alpha labels and source-level
+navigation checks passed. Browser/visual/keyboard acceptance, real demo interaction,
+correct account identity/permissions, explicit project/public deployment approval and
+hosted header behavior are NOT VERIFIED. **Stop at readiness; not launched.**

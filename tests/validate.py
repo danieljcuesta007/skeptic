@@ -6,7 +6,7 @@ import sys
 root=Path(__file__).resolve().parents[1]
 env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1')
 website=root/'apps/website';discovery=root/'packages/discovery'
-commands=[(root,[sys.executable,'-m','unittest','discover','-s','tests','-p','test_*.py']),(website,['npm','run','build']),(website,['npm','test']),
+commands=[(root,[sys.executable,'-m','unittest','discover','-s','tests','-p','test_*.py']),(website,['npm','run','build']),(website,['npm','test']),(website,['node','mutation-check.mjs']),
  (discovery,[sys.executable,'-W','error::ResourceWarning','-m','unittest','-v','test_engine.py','test_security.py']),
  (discovery,[sys.executable,'mutation_check_v2.py']),
  (discovery,[sys.executable,'mutation_check_security.py']),

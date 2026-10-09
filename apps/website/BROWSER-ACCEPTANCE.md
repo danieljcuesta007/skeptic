@@ -1,6 +1,7 @@
-# Step 39 browser acceptance — NOT PASSED / browser unavailable
+# Step 43A browser acceptance — NOT PASSED / browser unavailable
 
-Browser discovery returned an empty list. No real-browser run or screenshots were
+Step 43 default browser selection returned “No browser is available”; troubleshooting
+then confirmed the available-browser list was `[]`. No real-browser run or screenshots were
 possible. Node tests prove logic and static structure, not rendered accessibility.
 
 ## Run locally
@@ -13,11 +14,13 @@ header behavior must later be checked on an explicitly authorized Pages preview.
 
 ## Manual checklist and evidence to capture
 
-1. At 1440×900 and 1024×768, capture hero and walkthrough screenshots. Confirm
+1. On both `index.html` and `guide.html`, at 1440×900, 1024×768 and 768×1024,
+   capture hero, final CTA and walkthrough screenshots. Confirm
    white dominance, no clipped headings, legible text and intentional alignment.
-2. At 390×844 and 320×568, capture the same views; scroll the full document and
+2. At 375×812 and 390×844 (also 320×568 for reflow), capture the same views; scroll the full document and
    check for horizontal overflow. Also test browser text zoom at 200% and 400%.
-3. Activate every header, footer and in-page link. Ensure targets are visible and
+3. Confirm “Explore the preview” has compact dimensions and adjacent controls wrap
+   without clipping. Activate every header, footer and cross-page/in-page link. Ensure targets are visible and
    active state matches navigation. Check skip-to-content with Tab/Enter.
 4. For Claude Code, Codex, Local model and Starting fresh, complete all eight
    steps. Exercise all three knowledge sources and access modes. Next before a
@@ -43,3 +46,31 @@ Calculated sRGB contrast: #FF2800 on white = 3.78:1, insufficient for small norm
 text; black on #FF2800 = 5.56:1; #505050 on white = 8.06:1. Small step numbers and
 active nav text now use black with red structural accents. Red focus outlines and
 large/decorative accents remain. This is not complete rendered contrast acceptance.
+
+## Step 43 source evidence
+
+Six-section homepage and separate guide; 13 website tests, five UX mutations caught.
+Typography, shrinkable grids, wrapping controls, focus and reduced-motion rules
+checked in source. All five viewport results and actual keyboard/screen-reader
+behavior remain NOT VERIFIED. See ../../docs/ux/STEP43-REFINEMENT.md.
+
+## Step 43A additional acceptance — launch blocker
+
+Browser listing again returned `[]`. No rendered acceptance/screenshots performed.
+Website 15 tests/eight UX mutations passed; full suite 70 tests/62 mutations.
+
+- At 375, 390, 768, 1024 and 1440px, inspect the three-layer homepage diagram;
+  labels must remain readable, capabilities distinguish implemented/documented/planned,
+  arrows align, no layer/CTA clips and no horizontal scroll appears.
+- Inspect both guide diagrams; confirm their captions clearly describe synthetic
+  retrieval versus documented handoffs and planned provider delivery.
+- At 200%/400% zoom, all controls and diagram labels remain reachable/readable.
+- Tab through both pages and all eight onboarding steps on every starting path;
+  verify focus, errors, Back/restart, receipt/download/FAQ and inert signup.
+- Check reduced motion, screen-reader caption/heading order, contrast and Console/Network.
+- Capture browser/version, viewport/screenshots and pass/fail per item. Explicitly
+  confirm manual acceptance before public upload, then confirm the Cloudflare account,
+  exact project and public deployment approval. A public preview is also an upload.
+
+No automatic Cloudflare deployment while acceptance is unavailable or failing.
+See ../../docs/ux/STEP43A-LAUNCH-READINESS.md.

@@ -1,13 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, access } from 'node:fs/promises';
-const html = await readFile('index.html', 'utf8');
+const home = await readFile('index.html', 'utf8');
+const guide = await readFile('guide.html', 'utf8');
+const html = home + guide;
 const css = await readFile('style.css', 'utf8');
 const js = await readFile('app.js', 'utf8');
-test('all internal links resolve and all nine sections exist', () => {
- const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m=>m[1]));
- for(const m of html.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.has(m[1]), m[1]);
- for(const id of ['how','models','preview','markdown','ownership','roadmap','faq','start']) assert.ok(ids.has(id));
+test('all page and fragment links resolve with unique IDs per page', () => {
+ const pages = {'index.html':home, 'guide.html':guide};
+ for (const [name, page] of Object.entries(pages)) {
+  const values=[...page.matchAll(/id="([^"]+)"/g)].map(m=>m[1]);
+  const ids=new Set(values); assert.equal(ids.size,values.length, name);
+  for(const m of page.matchAll(/href="([^"]+)"/g)) {
+   if(m[1].endsWith('.css')||m[1].endsWith('.svg')) continue;
+   const [file,fragment]=m[1].split('#');
+   const target=pages[file||name]; assert.ok(target, m[1]);
+   if(fragment) assert.ok(target.includes(`id="${fragment}"`), m[1]);
+  }
+ }
+ for(const id of ['how','models','preview','markdown','ownership','roadmap','faq','start']) assert.ok(html.includes(`id="${id}"`));
 });
 test('local asset references exist', async()=> { for(const m of html.matchAll(/(?:src|href)="([^"#]+\.(?:css|js|svg))"/g)) await access(m[1]); });
 test('no external assets, network requests, accounts or private fixture paths',()=> { assert.doesNotMatch(html+js,/https?:\/\/|fetch\(|XMLHttpRequest|\/Users\/|skeptic-discovery/); });
@@ -61,4 +72,66 @@ test('deployment headers are built and small red text uses black contrast correc
  assert.match(headers,/connect-src 'none'/);assert.match(headers,/form-action 'none'/);assert.match(headers,/frame-ancestors 'none'/);
  assert.match(css,/\.step-number\{color:#000;border-left/);assert.match(css,/nav \.active\{color:#000;text-decoration/);
  const build=await readFile('build.mjs','utf8');assert.match(build,/'_headers'/);
+});
+
+test('homepage keeps six focused sections and full previews remain on the guide',()=>{
+ assert.equal((home.match(/<section\b/g)||[]).length,6);
+ for(const id of ['about','benefits','how','models','start']) assert.ok(home.includes(`id="${id}"`));
+ for(const id of ['onboarding','preview','docs','faq','early-access']) {
+  assert.ok(guide.includes(`id="${id}"`)); assert.ok(!home.includes(`id="${id}"`));
+ }
+ assert.match(home,/guide.html#onboarding/);
+ for(const path of ['Claude-first','Codex-first','Local-model-first','Fresh start']) assert.ok(home.includes(path));
+ assert.doesNotMatch(home,/<script/); // No demo handlers run against absent controls.
+ assert.match(guide,/src="app.js"/); assert.match(guide,/src="onboarding.js"/);
+});
+test('compact CTA and responsive shrink rules never mask overflow',()=>{
+ assert.doesNotMatch(css,/overflow(?:-x)?\s*:\s*(?:hidden|clip)/);
+ assert.match(css,/\.cta-actions \.button\s*\{\s*width:fit-content/);
+ assert.match(css,/min-height:44px/); assert.match(css,/flex-wrap:wrap/);
+ assert.match(css,/minmax\(0,1fr\)/); assert.match(css,/overflow-wrap:anywhere/);
+});
+test('each page has one primary heading and a labeled navigation and skip link',()=>{
+ for(const page of [home,guide]) {
+  assert.equal((page.match(/<h1\b/g)||[]).length,1);
+  assert.match(page,/aria-label="Main navigation"/);
+  assert.match(page,/class="skip" href="#main"/);
+  assert.match(page,/id="main" tabindex="-1"/);
+ }
+});
+
+test('architecture diagrams retain accessible descriptions and truthful capability status',()=>{
+ const captions=['architecture-caption','context-caption','handoff-caption'];
+ for(const id of captions) {
+  assert.match(html,new RegExp(`aria-labelledby="${id}"`));
+  assert.match(html,new RegExp(`<figcaption id="${id}">`));
+ }
+ assert.equal((html.match(/<figure\b/g)||[]).length,3);
+ for(const label of ['User-owned knowledge','Skeptic OS','Claude Code','Codex','Local AI']) assert.ok(home.includes(label));
+ for(const label of ['Knowledge discovery','Session handoffs','Preference learning','Model onboarding','Memory updates','Context optimization']) assert.ok(home.includes(label));
+ assert.match(home,/Preference learning<\/strong><span>Planned/);
+ assert.match(home,/Memory updates<\/strong><span>Planned/);
+ assert.match(home,/Knowledge discovery<\/strong><span>Implemented prototype/);
+ assert.match(home,/Session handoffs<\/strong><span>Documented workflow/);
+ assert.match(home,/no live connections/);
+ assert.match(guide,/provider delivery is planned/);
+ assert.match(guide,/Automated cross-model onboarding remains planned/);
+ assert.match(css,/\.capability-grid\s*\{[^}]*minmax\(0,1fr\)/);
+});
+
+test('production package contains only reviewed local assets and inert signup',async()=>{
+ const {readdir}=await import('node:fs/promises');
+ const files=['index.html','guide.html','style.css','app.js','favicon.svg','onboarding.js','wizard-state.js','_headers'];
+ assert.deepEqual((await readdir('dist')).sort(),files.sort());
+ let contents='';
+ for(const file of files) {
+  const built=await readFile(`dist/${file}`,'utf8');
+  assert.equal(built,await readFile(file,'utf8'),file);
+  contents+=built.replace('http://www.w3.org/2000/svg','');
+ }
+ assert.doesNotMatch(contents,/\/Users\/|\/home\/|\/private\/tmp\/|BEGIN (?:RSA |OPENSSH )?PRIVATE KEY|AKIA[A-Z0-9]{16}|sk-[a-zA-Z0-9]{20,}/);
+ assert.doesNotMatch(contents,/https?:\/\/|fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|google-analytics|cloudflareinsights|localStorage|sessionStorage/);
+ assert.match(guide,/type="email"[^>]*disabled/);
+ assert.doesNotMatch(guide,/<form[^>]+action=/);
+ assert.match(await readFile('onboarding.js','utf8'),/nothing was submitted or saved/);
 });

@@ -5,9 +5,9 @@ const descriptions=[
  'Your knowledge already has a home. Explore how a new model could learn its way around. This is a demonstration, not an installation.',
  'Choose a starting path. Skeptic should adapt to your tools, not ask you to abandon them.',
  'Choose the kind of knowledge you already have. No filesystem permission is requested and no files are opened.',
- 'Choose explicitly. Full brain is the project owner’s personal design default, not an assumed default for every user.',
+ 'You decide what can be searched. Choose all eligible notes, one project, or a small starting scope that asks before expanding. No option is selected for you.',
  'Examples: “Keep updates concise” (explicit), “often asks for examples” (observed), “may prefer diagrams” (tentative). Only approved explicit rules should become permanent.',
- 'A future adapter would supply applicable rules, relevant project state and source references. No provider is connected here.',
+ 'Future setup would give your AI the relevant instructions and project progress, with references to your files. No provider is connected here.',
  'A checkpoint preserves verified outcomes, unknowns and the exact next action. Current files outrank a stale handoff.',
  'Walkthrough complete. No installation, scan or configuration change has occurred. Production adapters and release packaging remain future work.'
 ];
@@ -21,7 +21,7 @@ function render(focus=true){
  if(state.step===1)example=paths[state.model]||'Claude Code · Codex · Local models · Starting fresh';
  if(state.step===2)example=state.source?`${state.source}: synthetic example only. Other integrations are coming later.`:'Obsidian and ordinary Markdown first. Other integrations are coming later.';
  if(state.step===3)example=modes[state.mode]||'No policy selected. Read access never grants write or upload permission.';
- if(state.step===4)example='PROPOSAL → evidence → your approval → canonical update. No automatic preference promotion.';
+ if(state.step===4)example='A suggested preference → supporting examples → your approval → a saved rule. Nothing is learned or saved automatically.';
  if(state.step===5)example=`${paths[state.model]}\nSample references: principles.md · preferences.md · projects/atlas/status.md. ${modes[state.mode]}`;
  if(state.step===6)example=`${state.model==='Codex'?'Codex → Local model':'Claude Code → Codex'}\nDONE: outlined milestone. VERIFIED: reviewed synthetic checkpoint. NOT VERIFIED: real provider behavior. NEXT: review scope before editing.`;
  if(state.step===7)example=`${summary(state)}\nNext: explore the introductory docs or restart with another path. Real setup will require a released adapter and explicit permissions.`;
