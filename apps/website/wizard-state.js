@@ -1,0 +1,8 @@
+export const steps = ['Welcome to Skeptic.', 'Start with the AI you use.', 'Your knowledge already has a home.', 'Choose your boundaries.', 'Preferences, with provenance.', 'A model that starts with context.', 'Pick up where you left off.', 'You’re ready for the next chapter.'];
+export const paths = {'Claude Code':'Reuse your existing Markdown instructions; keep Claude-specific review requirements intact.', 'Codex':'Load the shared canonical rules and current project checkpoint before acting.', 'Local model':'Verify file access, tools and context limits. Local inference does not guarantee agent capabilities.', 'Starting fresh':'Begin with a small Markdown workspace and explicit preferences. No model or folder is created in this demo.'};
+export const sources = ['Existing Obsidian vault','Existing Markdown folder','New Markdown workspace'];
+export const modes = {FULL_BRAIN:'All eligible ordinary notes can be searched. Only relevant context is retrieved; protected secrets stay excluded.',PROJECT_SCOPED:'Shared instructions plus authorized project context. Other areas stay outside scope.',ASK_TO_EXPAND:'Minimal initial context. Ask before searching additional areas.'};
+export function initial(){ return {step:0,model:'',source:'',mode:''}; }
+export function advance(state){const key={1:'model',2:'source',3:'mode'}[state.step];if(key&&!state[key])return {state,error:'Choose an option to continue.'};return {state:{...state,step:Math.min(7,state.step+1)},error:''};}
+export function back(state){return {...state,step:Math.max(0,state.step-1)};}
+export function summary(state){return `${state.model} · ${state.source} · ${state.mode}`;}

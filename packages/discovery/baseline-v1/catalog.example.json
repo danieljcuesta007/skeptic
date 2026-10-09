@@ -1,0 +1,45 @@
+{
+  "excluded": [
+    "b:private"
+  ],
+  "projects": [
+    {
+      "id": "synthetic-demo",
+      "status": "b:STATUS.md",
+      "sources": [
+        {
+          "path": "b:rules.md",
+          "role": "rule",
+          "preferences": {
+            "privacy": "private"
+          }
+        },
+        {
+          "path": "b:STATUS.md",
+          "role": "status"
+        },
+        {
+          "path": "b:alpha.md",
+          "role": "note",
+          "tags": [
+            "alpha"
+          ]
+        },
+        {
+          "path": "b:beta.md",
+          "role": "note",
+          "tags": [
+            "beta"
+          ]
+        },
+        {
+          "path": "b:private/excluded.md",
+          "role": "note",
+          "tags": [
+            "alpha"
+          ]
+        }
+      ]
+    }
+  ]
+}
