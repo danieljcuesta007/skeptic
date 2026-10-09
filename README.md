@@ -21,8 +21,9 @@ runtime packages, provider accounts, network calls or installation required.
 
     python3 tests/validate.py
 
-This runs the website build/10 tests, discovery 24 tests/24 mutation checks, and
-baseline 18 tests/18 mutation checks. Test counts describe Step 40, not future runs.
+Step 42: website build/10 tests, discovery 24 existing + 12 security tests,
+24 existing + 12 security mutation checks, preserved baseline 18 tests/18 mutations,
+and 1 migration regression: 65 tests and 54 mutation checks total.
 
 ## Preview
 
@@ -43,8 +44,9 @@ cache outside this repository. Never point this pre-alpha at a private real vaul
 
 ## Status and boundaries
 
-Browser acceptance, adversarial security review, native provider onboarding, safe
-install/uninstall and live integration remain release blockers. No remote is
+Step 41 review findings were fixed and regression-tested in Step 42; broader race,
+resource and production security acceptance remain open. Browser acceptance, native
+provider onboarding and safe install/uninstall remain release blockers. No remote is
 configured and nothing is published. See [roadmap](docs/roadmap/ROADMAP.md),
 [migration](docs/development/MIGRATION.md), [GitHub plan](docs/development/GITHUB-PLAN.md)
 and [license decision](LICENSE-DECISION.md).

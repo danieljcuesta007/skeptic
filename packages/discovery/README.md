@@ -53,15 +53,29 @@ rejected. Atomic index persistence uses owner-only files outside the knowledge r
 
 ## Trust boundaries and limitations
 
-Config and previous indexes are trusted host inputs, not untrusted model output. No
-cryptographic cache authentication, encrypted index, hostile-parent race defense, or
-operating-system sandbox is provided. Returned passage text is reconstructed from freshly read source bytes, not cached
-chunks. A malicious index can still influence ranking or omit sources; configuration
-and cache schema validation need additional hardening. JSON index loading in the CLI
-is a separate trusted input read. Filesystem case/Unicode aliases, denial-of-service,
-root replacement races and concurrent edits need further review. Metadata alone is not
-proof of byte freshness. Source budgets do not guarantee every required rule fits into
-the returned passages; receiving agents must read applicable full rule references.
+Host policy is trusted authorization; persisted indexes and catalogs are untrusted data.
+Cache envelopes, scoped records, types and resource bounds are validated before source
+reads; protected/revoked and non-Markdown ordinary cache records are discarded. Invalid
+caches raise `Denied` with generic diagnostics; the CLI exits without a traceback or
+fallback provider. Rebuild explicitly after inspecting the cache/policy. The CLI limits
+cache input to 32 MiB, rejects duplicate JSON keys, non-finite constants and unsafe
+cache files. Cache records cannot grant source roles or expand host scope.
+
+Exclusions match casefolded, NFKC-normalized names conservatively on every platform.
+Descriptor reads require each path component to match an actual directory entry exactly,
+rejecting alternate aliases before opening note bodies. This can overexclude names and
+adds directory enumeration cost. Returned passages come from freshly read bytes and are
+credential-checked again; governing handoffs/preferences must also be fresh and pass
+that heuristic before emission. Governing validation does not bypass cache validation.
+
+No cryptographic cache authentication, encrypted index, hostile-parent race defense or
+OS sandbox is provided. A malicious valid cache can influence ranking/omissions and
+hash-based freshness is not authentication against an attacker controlling cache and
+sources. JSON bounds mitigate some malformed-input failures, not all resource attacks;
+large-vault performance and concurrent root/parent changes remain unverified. File mode
+0600 does not protect against same-user processes. Metadata alone is not proof of byte
+freshness. Source budgets do not guarantee every required rule fits into returned
+passages; agents must read applicable full rule references.
 
 Lexical ranking is deliberately simple, not semantic search. Markdown-only; attachments,
 external symlinked folders and proprietary app data are not covered. On-disk text chunks
@@ -90,3 +104,11 @@ roots, rule roles or policies. Root configuration remains trusted host authoriza
 Structured rule declarations use `Preference: key = value`; conflicts block next action.
 Private index persistence rejects Git-ancestor destinations. Quarantine output withholds
 filenames. These additions do not authenticate hostile caches or enforce an OS sandbox.
+
+## Step 42 — Security Hardening & Shared Development Step Naming
+
+S41-01/02/03 are fixed with synthetic adversarial regressions. See
+`../../docs/security/STEP42-HARDENING.md` for evidence, remaining limits and verification.
+Run `python3 -B -m unittest -v test_engine.py test_security.py`, then
+`python3 -B mutation_check_v2.py` and `python3 -B mutation_check_security.py`.
+The preserved baseline is unchanged. No live scanning or provider integration is installed.

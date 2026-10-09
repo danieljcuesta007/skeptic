@@ -10,10 +10,20 @@ from pathlib import Path
 import re
 import stat
 import tempfile
+import unicodedata
 
 MODES = {'FULL_BRAIN', 'PROJECT_SCOPED', 'ASK_TO_EXPAND'}
 BUILTIN_EXCLUSIONS = ['.git', '.obsidian', '.ai', '.health', '.trash', 'node_modules',
                       '.env*', '*credentials*', '*secrets*', '*private-key*']
+
+MAX_CACHE_BYTES = 32 * 1024 * 1024
+
+def credential_like(text):
+    return bool(re.search(r'-----BEGIN .*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}', text))
+
+def path_key(text):
+    # Conservative matching also protects case/normalization aliases on POSIX hosts.
+    return unicodedata.normalize('NFKC', text).casefold()
 
 class Denied(ValueError):
     pass
@@ -52,15 +62,17 @@ class Engine:
         return [s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns]
 
     def validate(self, path):
-        if not isinstance(path, str) or path.startswith('/') or any(p in ('', '.', '..') for p in path.split('/')):
+        if not isinstance(path, str) or len(path)>4096 or '\x00' in path or path.startswith('/') or any(p in ('', '.', '..') for p in path.split('/')):
             raise Denied('Unsafe relative path')
         return path.split('/')
 
     def excluded(self, path):
-        bits = self.validate(path)
+        bits = [path_key(bit) for bit in self.validate(path)]
+        path = path_key(path)
+        patterns = [path_key(pattern) for pattern in self.exclusions]
         return any(fnmatch.fnmatchcase(path, pattern) or path.startswith(pattern.rstrip('/') + '/')
                    or any(fnmatch.fnmatchcase(bit, pattern) for bit in bits)
-                   for pattern in self.exclusions)
+                   for pattern in patterns)
 
     def scoped(self, path, project):
         if self.excluded(path): return False
@@ -88,8 +100,10 @@ class Engine:
         fd = self.rootfd
         try:
             for part in bits[:-1]:
+                if part not in os.listdir(fd): raise Denied('Noncanonical source alias')
                 fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
                 handles.append(fd)
+            if bits[-1] not in os.listdir(fd): raise Denied('Noncanonical source alias')
             info = os.stat(bits[-1], dir_fd=fd, follow_symlinks=False)
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 raise Denied('Symlinks, special files and hard-linked files rejected')
@@ -137,7 +151,7 @@ class Engine:
 
     def index(self, project=None, previous=None):
         p = self.project(project)
-        previous = previous or {}
+        previous = self.validate_cache(previous, project) if previous is not None else {}
         policy_hash = hashlib.sha256(json.dumps(self.config, sort_keys=True).encode()).hexdigest()
         reusable = previous.get('root_identity') == self.root_identity and previous.get('root') == str(self.root)
         old = previous.get('documents', {}) if reusable else {}
@@ -153,7 +167,7 @@ class Engine:
                 text = data.decode('utf-8')
                 # A secondary heuristic can quarantine unexpected secret-like material.
                 # It cannot prevent the local read or replace path exclusions.
-                if re.search(r'-----BEGIN .*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}', text):
+                if credential_like(text):
                     quarantined.add(path)
                     errors.append({'reason': 'quarantined credential-like content; filename withheld'})
                     continue
@@ -172,6 +186,56 @@ class Engine:
                 'documents':docs,'changes':{'added':added,'removed':removed,'changed':changed,'rename_candidates':renames},
                 'errors':errors}
 
+    def validate_cache(self, index, project=None):
+        """Cache is data, never authority. Reject malformed scoped records before reads."""
+        p = self.project(project)
+        try:
+            if not isinstance(index, dict) or index.get('schema') != 2:
+                raise Denied('Invalid cache; rebuild explicitly')
+            if index.get('root') != str(self.root) or index.get('root_identity') != self.root_identity:
+                raise Denied('Invalid cache; rebuild explicitly')
+            if index.get('mode') not in MODES or not isinstance(index.get('policy_hash'), str):
+                raise Denied('Invalid cache; rebuild explicitly')
+            if not re.fullmatch(r'[0-9a-f]{64}', index['policy_hash']):
+                raise Denied('Invalid cache; rebuild explicitly')
+            if index.get('project') is not None and not isinstance(index['project'], str):
+                raise Denied('Invalid cache; rebuild explicitly')
+            if not isinstance(index.get('observed_at'), str) or len(index['observed_at'])>100:
+                raise Denied('Invalid cache; rebuild explicitly')
+            documents = index.get('documents')
+            if not isinstance(documents, dict) or len(documents)>10000:
+                raise Denied('Invalid cache; rebuild explicitly')
+            safe, total_chunks, total_chars = {}, 0, 0
+            for path, doc in documents.items():
+                # Revoked/protected records cannot trigger body reads or reach output.
+                if not self.scoped(path, p): continue
+                if path not in self.rules and not (p and path==p['status']) and not path.lower().endswith('.md'):
+                    continue
+                if not isinstance(doc, dict): raise Denied('Invalid cache; rebuild explicitly')
+                signature = doc.get('signature')
+                if not isinstance(signature, list) or len(signature)!=5 or any(type(n) is not int or n<0 for n in signature):
+                    raise Denied('Invalid cache; rebuild explicitly')
+                digest, chunks = doc.get('sha256'), doc.get('chunks')
+                if not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest):
+                    raise Denied('Invalid cache; rebuild explicitly')
+                if not isinstance(chunks, list) or len(chunks)>10000:
+                    raise Denied('Invalid cache; rebuild explicitly')
+                cleaned = []
+                for chunk in chunks:
+                    if not isinstance(chunk, dict): raise Denied('Invalid cache; rebuild explicitly')
+                    line, text = chunk.get('line'), chunk.get('text')
+                    if type(line) is not int or not 1<=line<=10000 or not isinstance(text, str) or len(text)>600:
+                        raise Denied('Invalid cache; rebuild explicitly')
+                    total_chunks += 1; total_chars += len(text)
+                    if total_chunks>100000 or total_chars>MAX_CACHE_BYTES:
+                        raise Denied('Invalid cache; rebuild explicitly')
+                    cleaned.append({'line':line, 'text':text})
+                safe[path] = {'signature':signature[:], 'sha256':digest, 'chunks':cleaned}
+            return {**{key:index[key] for key in ('schema','root','root_identity','policy_hash','mode','project','observed_at')},
+                    'documents':safe}
+        except (KeyError, TypeError, AttributeError, RecursionError):
+            raise Denied('Invalid cache; rebuild explicitly') from None
+
     def validate_catalog(self, catalog, project=None):
         """Untrusted catalogs may request scoped sources, never set roots, roles or policy."""
         if not isinstance(catalog, dict) or set(catalog) != {'sources'} or not isinstance(catalog['sources'], list):
@@ -185,6 +249,9 @@ class Engine:
     def revalidate_governing(self, index, project=None):
         """Call immediately before consequential actions; query calls this regardless of budget."""
         p = self.project(project)
+        index = self.validate_cache(index, project)
+        policy_hash=hashlib.sha256(json.dumps(self.config,sort_keys=True).encode()).hexdigest()
+        if index['policy_hash']!=policy_hash or index['project']!=project or index['root_identity']!=self.root_identity: raise Denied('Reindex after policy/project changes')
         references, missing, stale, preferences = [], [], [], {}
         handoff = None
         required = self.rules + ([p['status']] if p else [])
@@ -199,7 +266,12 @@ class Engine:
                     missing.append(path)
                     continue
                 if digest != record['sha256']: stale.append(path)
+                if credential_like(text):
+                    missing.append(path)
+                    continue
                 references.append({'path':path, 'sha256':digest, 'requires_full_read':path in self.rules})
+                if digest != record['sha256']:
+                    continue  # Never emit stale handoff/preference contents.
                 if path in self.rules:
                     # Deliberately explicit fixture syntax; ordinary notes never supply preferences.
                     for key,value in re.findall(r'^Preference: ([A-Za-z0-9 _.-]+) = (.+)$', text, re.MULTILINE):
@@ -218,6 +290,7 @@ class Engine:
     def query(self, index, task, project=None, limit=5, max_chars=1800, explicit=(), catalog=None):
         if not task.strip() or not 1<=limit<=20 or not 100<=max_chars<=10000: raise Denied('Invalid query or bounds')
         p = self.project(project)
+        index = self.validate_cache(index, project)
         policy_hash=hashlib.sha256(json.dumps(self.config,sort_keys=True).encode()).hexdigest()
         if index['policy_hash']!=policy_hash or index['project']!=project or index['root_identity']!=self.root_identity: raise Denied('Reindex after policy/project changes')
         for path in explicit:
@@ -245,7 +318,8 @@ class Engine:
                     _,data=self.inspect(path,True)
                     checked[path]=hashlib.sha256(data).hexdigest()==index['documents'][path]['sha256']
                     live_text[path]=data.decode('utf-8')
-                except (OSError,Denied): checked[path]=False
+                    if credential_like(live_text[path]): checked[path]=False
+                except (OSError,Denied,UnicodeError): checked[path]=False
             if not checked[path]:
                 if path not in stale: stale.append(path)
                 continue
@@ -262,7 +336,7 @@ class Engine:
                 'governing':governing, 'current_handoff':governing['handoff'],
                 'conflicting_preferences':governing['conflicts'],
                 'capabilities':{'file_references':True,'provider_tools':'unknown','execution':False},
-                'unknowns':['Provider capabilities and Git/concurrency unverified','Index/cache must be trusted local inputs',
+                'unknowns':['Provider capabilities and Git/concurrency unverified','Host policy is trusted; untrusted cache can affect ranking/omissions but cannot grant access',
                             'Natural-language preference conflicts are not automatically resolved'],
                 'next':'Reindex/resolve required sources before acting' if stale or missing or governing['conflicts'] else
                     'Read selected context; ask before expanding scope' if self.mode=='ASK_TO_EXPAND' else
@@ -288,6 +362,34 @@ def save_index(path, index):
         if os.path.exists(tmp): os.unlink(tmp)
 
 
+def load_index(path):
+    """Bounded, no-follow cache input; reject ambiguous JSON and unsafe files."""
+    def unique_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result: raise Denied('Invalid cache; rebuild explicitly')
+            result[key] = value
+        return result
+    fd = None
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or info.st_size>MAX_CACHE_BYTES:
+            raise Denied('Invalid cache; rebuild explicitly')
+        with os.fdopen(fd, 'rb') as stream:
+            fd = None
+            data = stream.read(MAX_CACHE_BYTES+1)
+        if len(data)>MAX_CACHE_BYTES: raise Denied('Invalid cache; rebuild explicitly')
+        result = json.loads(data, object_pairs_hook=unique_pairs,
+                            parse_constant=lambda _: (_ for _ in ()).throw(Denied('Invalid cache; rebuild explicitly')))
+        if not isinstance(result, dict): raise Denied('Invalid cache; rebuild explicitly')
+        return result
+    except (OSError, ValueError, UnicodeError, RecursionError):
+        raise Denied('Invalid cache; rebuild explicitly') from None
+    finally:
+        if fd is not None: os.close(fd)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--policy',required=True);parser.add_argument('--index',required=True)
@@ -295,11 +397,14 @@ def main():
     args=parser.parse_args()
     config=json.loads(Path(args.policy).read_text())
     path=Path(args.index)
-    previous=json.loads(path.read_text()) if path.exists() and not path.is_symlink() else None
+    previous=load_index(path) if path.exists() or path.is_symlink() else None
     with Engine(config) as engine:
         index=engine.index(args.project,previous)
         receipt=engine.query(index,args.task,args.project)
         save_index(path,index)
     print(json.dumps(receipt,indent=2,ensure_ascii=False))
 
-if __name__=='__main__':main()
+if __name__=='__main__':
+    try: main()
+    except Denied:
+        raise SystemExit('Invalid or unauthorized input; review policy/cache and rebuild explicitly') from None

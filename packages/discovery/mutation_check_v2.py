@@ -25,7 +25,7 @@ cases={
 'policy_change_revokes_cached_text':("if index['policy_hash']!=policy_hash or index['project']!=project or index['root_identity']!=self.root_identity:","if False:"),
 'untrusted_notes_remain_data':("else 'data'","else 'rule'"),
 'ambiguous_project_and_unsafe_paths':("if len(hits) != 1:","if not hits:"),
-'credential_heuristic_quarantines_no_content':("if re.search(r'-----BEGIN", "if False and re.search(r'-----BEGIN"),
+'credential_heuristic_quarantines_no_content':("if credential_like(text):", "if False and credential_like(text):"),
 'private_index_and_no_note_writes_or_external_actions':("os.fchmod(fd,0o600)","os.fchmod(fd,0o644)"),
 'full_brain_without_project':("'handoff':p['status']+'#handoff' if p else None","'handoff':p['status']+'#handoff' if p else 'wrong'"),
 'missing_rule_blocks_next_action':("'missing_required':missing","'missing_required':[]"),
@@ -33,6 +33,7 @@ cases={
 for name,(old,new) in cases.items():
  assert old in source,name
  modified=source.replace(old,new)
+ if name=='cache_cannot_expand_scope': modified=modified.replace('if not self.scoped(path, p): continue','if False: continue')
  if name=='scope_before_reads': modified=modified.replace("if self.mode != 'FULL_BRAIN':",'if False:')
  m=types.ModuleType('mutant');exec(compile(modified,'<fault>','exec'),m.__dict__)
  with patch.object(test_engine,'Engine',m.Engine),patch.object(test_engine,'Denied',m.Denied),patch.object(test_engine,'save_index',m.save_index):

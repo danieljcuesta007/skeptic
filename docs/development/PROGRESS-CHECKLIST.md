@@ -2,6 +2,9 @@
 
 After authorized development work, before stopping:
 
+- [ ] Read canonical STATUS first; resume its project-owned step or assign the next
+      sequential `Step <number> — <descriptive title>`. Do not reuse numbers or infer completion.
+- [ ] Record step number/title, objective and next step in checkpoint and recap.
 - [ ] Collect completed changes and distinguish prototypes from released features.
 - [ ] Record checks actually run, counts/results and failures; no invented success.
 - [ ] Record source repository, branch, full HEAD, staged/unstaged/untracked state.
