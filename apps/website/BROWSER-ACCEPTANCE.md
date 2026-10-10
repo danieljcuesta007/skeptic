@@ -74,3 +74,81 @@ Website 15 tests/eight UX mutations passed; full suite 70 tests/62 mutations.
 
 No automatic Cloudflare deployment while acceptance is unavailable or failing.
 See ../../docs/ux/STEP43A-LAUNCH-READINESS.md.
+
+## Step 43A resume — 2026-10-09T15:11:42Z
+
+Resumed from the verified Step 43C save; no new milestone. Observed `main` HEAD
+and local `origin/main` reference both at `d8bf333a3fd758c8f26052312ad540c602292eaf`;
+source was clean. This is a local reference check, not fresh remote verification.
+Full `python3 -B tests/validate.py` passed: 70 tests / 62 mutations caught, eight
+built assets. Source, rebuilt dist, existing ZIP and manifest match exactly:
+47,479 bytes; ZIP SHA-256
+`d2d9343117b8e6b4f2b0ca883b8376610d3809f79322826e9a95463d4aeef799`.
+
+Browser skill setup succeeded, URL selection returned “No browser is available”,
+and supported troubleshooting discovery returned `[]`. No rendered acceptance,
+screenshots, real interactions, zoom, keyboard/screen-reader or Network/Console
+checks performed. No confirmed visual defect can be established. No website code
+changed. Wrangler absent; account/target remain unknown. No deployment, commit,
+push, provider change or new development milestone performed.
+
+Cloudflare Direct Upload and headers documentation rechecked on 2026-10-09:
+[Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/),
+[Headers](https://developers.cloudflare.com/pages/configuration/headers/).
+Existing static upload proposal remains applicable; hosted headers remain unverified.
+Next: restore an available browser and run the existing acceptance checklist on both
+pages at all specified widths. Keep launch blocked until acceptance and explicit
+account/target/public-upload approval; user manual acceptance confirmation remains
+required. Prior Step 43C backup evidence and app/roadmap constraints preserved.
+
+## Step 43A — user-observed visual corrections · 2026-10-09T15:22:48+00:00
+
+Daniel reported actual real-browser screenshot feedback: primary CTA text/arrow
+were black, and the homepage architecture looked like a wireframe. This is user
+browser-observed design feedback, not completion of the browser acceptance checklist.
+Screenshots were referenced by Daniel; no image attachments were available to this
+agent for independent inspection.
+
+Changed primary CTA text and inherited arrow to white on #FF2800, including hover
+and active states. White/red contrast is 3.78:1: 19px/700 text qualifies as large
+text (3:1 minimum). Compact padding/fit-content and 44px targets remain. Black
+focus outline provides 21:1 against white; disabled white on #505050 is 8.06:1,
+with full opacity. No disabled primary CTA is currently added to the product.
+
+Homepage-only architecture styling now uses 13 icon-led source/capability/model
+cards and two SVG arrows, refined spacing/borders/type, a restrained red top rule,
+short capability descriptions and explicit prototype/documented/planned statuses.
+Inline icons are decorative alongside visible text; no dependencies/external assets.
+Cards use shrinkable grids, two source columns at tablet/mobile and one at extra
+narrow widths; capabilities become one column at mobile widths. Guide diagram markup
+and existing styles preserved; CTA styling is shared across both pages. Six sections,
+eight-step onboarding, four paths, privacy/pre-alpha/security protections retained.
+
+Full validation passed: **72 tests / 64 mutations caught**, eight-asset build.
+Two new regressions rejected black primary CTA and missing architecture icon faults.
+Diff whitespace checks passed; guide.html, _headers and discovery engine unchanged.
+Browser discovery still `[]`: revised rendered layout, zoom, overflow, keyboard,
+screen reader, hover/focus/active appearance and Network/Console NOT VERIFIED.
+No claim of full browser acceptance or deployment readiness acceptance.
+
+Regenerated local-only ZIP/manifest; source/dist/archive bytes match exactly.
+Eight assets, 55,955 bytes; ZIP SHA-256 `69ac4a1f01ff45ef0fa9733cc432b0c2578dd846cf437704832737cf78b214af`.
+This supersedes previous artifact hashes/sizes and source-clean statements for
+current upload review. No commit/push/deploy/new milestone. Source changes unstaged
+on main at d8bf333; local origin/main reference unchanged (not fresh remote evidence).
+Next: inspect revised site in a real browser using the existing full checklist,
+then manual acceptance/account/target/public-upload approval gates.
+
+## Step 43B — Monochrome brand acceptance addendum
+
+Daniel approved black/white with supporting neutral grays: “Not everything is black
+and white.” Prior red styling/artifact entries above remain historical. Current
+source/dist uses monochrome; older ZIP/upload artifacts are stale and must not be
+used. No deployment or Cloudflare action was performed.
+
+On both homepage and guide, verify entirely monochrome wordmark/favicon/icons/diagrams,
+black primary CTAs with white text, white secondary CTAs with black text, neutral
+borders/backgrounds, keyboard focus, hover/active/disabled states and preserved visible
+prototype/planned/documented labels. Test existing widths/zoom/offline checks above.
+Source-level contrast and palette tests do not establish rendered browser acceptance.
+The agent has no available browser; website visual acceptance remains pending.

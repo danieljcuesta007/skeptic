@@ -3,12 +3,33 @@
 **Your AI can change. Your knowledge stays.**
 
 Pre-alpha, provider-independent Markdown knowledge bridge. This repository contains
-isolated website/onboarding and discovery prototypes, tested on synthetic data only.
-It is not a production installer, knowledge editor, or replacement for Obsidian.
+website/onboarding and discovery prototypes plus a read-only local project app,
+automatically tested on synthetic data only. Daniel confirmed the initial local MVP;
+unified-workspace browser acceptance remains pending.
+It includes a local terminal installer; it is not a knowledge editor or replacement for Obsidian.
+
+## Terminal model switching — Step 43D
+
+A terminal-first switcher is now implemented; real existing-project/provider acceptance
+is pending. No dashboard or prompt copy/paste required:
+
+```sh
+python3 -B ~/Developer/skeptic/apps/terminal/install.py
+export PATH="$HOME/.local/bin:$PATH"; rehash
+```
+
+Return from Claude Code to the shell in your existing project, then run `skeptic`
+and choose Codex with Up/Down and Enter, or `skeptic continue --with codex`.
+First use asks for explicit persistent read approval; `skeptic permissions revoke PATH`
+revokes it. Claude is also a destination; detected loopback local models use Codex's
+OSS adapter. Native commands prepare handoffs and require a return to shell for switching.
+[Commands, installation, permissions, limitations and real acceptance](apps/terminal/README.md).
+No commits, pushes or deployment are performed by the switcher.
 
 ## Layout
 
 - `apps/website/` — static marketing site, eight-step demo and manual browser checklist.
+- `apps/local/` — local project approvals, attributed overviews and copyable resume prompts.
 - `packages/discovery/` — local lexical index, three access modes and neutral receipts.
 - `packages/discovery/baseline-v1/` — preserved V1 regression source and fixtures.
 - `docs/` — architecture, product, roadmap, security and development plans.
@@ -21,13 +42,32 @@ runtime packages, provider accounts, network calls or installation required.
 
     python3 tests/validate.py
 
-Step 43A: eight-asset website build/15 tests, discovery 36 tests/36 mutations,
-preserved baseline 18 tests/18 mutations, one migration regression and eight UX
-mutations: 70 tests and 62 mutations caught. See the
+Step 43B: website eight-asset build/18 tests/11 mutations, local three-asset build/
+60 tests/56 mutations, discovery 36/36, baseline 18/18 and one migration regression:
+**133 tests and 121 mutations caught**. HTTP tests exercise actual parsing/handlers
+with an in-memory transport; live socket/browser acceptance is pending. See the
+[local MVP report](docs/ux/STEP43B-LOCAL-MVP.md) and the
 [launch readiness report](docs/ux/STEP43A-LAUNCH-READINESS.md).
 Browser acceptance and Cloudflare deployment remain blocked; not launched.
 
+Approved identity: black and white with supporting neutral grays. “Not everything
+is black and white.” Existing layouts and truthful implementation labels are retained.
+
 ## Preview
+
+Local application (Python only, no installation/account):
+
+```sh
+python3 -B ~/Developer/skeptic/apps/local/app.py
+```
+
+Open http://127.0.0.1:4317. Stop with Ctrl-C. Connect your vault and repository roots
+with explicit read approval;
+no note edits/uploads/provider calls. [First-use, security and removal guide](apps/local/README.md).
+Real socket/browser acceptance is pending; [manual checklist](apps/local/BROWSER-ACCEPTANCE.md).
+Step 43A public website remains separate, partial and not deployed.
+
+Website prototype:
 
     cd apps/website
     npm run build
@@ -56,3 +96,11 @@ and [license decision](LICENSE-DECISION.md).
 The owner's private canonical project checkpoint remains outside this source
 repository. Documentation here is product/development material, not another personal
 memory system. Progress updates are manual; no hooks or sync services are installed.
+
+
+## Managed multi-session work — Step 44
+
+Temporary-project managed switching now has current/selected/all scopes, explicit provider
+contracts and a durable recovery journal. Engine runtime/native acceptance is incomplete;
+active sources and production migration remain unsupported. The implementation is not
+production ready. [Commands, evidence and limitations](apps/terminal/MANAGED.md).
