@@ -5,6 +5,7 @@ import stat
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT = r'''const t = Application('/System/Applications/Utilities/Terminal.app');
@@ -16,6 +17,57 @@ if (rows.length > 128) throw Error('Tab limit exceeded');
 }} JSON.stringify(rows); }'''
 TTY = re.compile(r'^/dev/ttys[0-9]+$')
 UUID = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+
+
+def birth_epoch(pid, execute=None):
+    """Normalize process birth to UTC epoch seconds.
+
+    Claude's native session records store procStart in UTC while `ps -lstart`
+    renders the same instant in the machine's local timezone, so the two
+    strings can differ (e.g. UTC vs EDT) for the exact same process. Comparing
+    the raw strings would treat one live process as two different ones and
+    silently degrade window association. Parse both to an epoch and compare
+    numbers. A record whose clock cannot be normalized never asserts identity.
+    """
+    execute = execute or command
+    raw = execute(['/bin/ps', '-p', str(pid), '-o', 'lstart=']).strip()
+    if not raw: raise ValueError('Process birth unavailable')
+    return normalize_birth(raw)
+
+
+def normalize_birth(raw, source='ps'):
+    """Parse a process-birth string to UTC epoch seconds.
+
+    The same instant appears in two encodings on this system: `ps -lstart`
+    renders the machine's LOCAL time ('Tue Oct  6 14:14:54 2026', EDT) while
+    Claude's native session records store procStart in UTC
+    ('Tue Oct  6 18:14:54 2026'). These differ by the local offset for the
+    identical process, so raw-string comparison treats one running Claude as
+    two processes and silently degrades window association. Parse each to a
+    single comparable number in the zone it is actually written in:
+
+      source='ps'     no explicit zone -> the machine's local time
+      source='record' no explicit zone -> UTC
+    ISO inputs with an explicit Z/offset are honored as written regardless of
+    source. Unparseable returns None so identity stays unasserted, not guessed.
+    """
+    if not isinstance(raw, str): return None
+    text = raw.strip()
+    if not text: return None
+    if text.isdigit(): return int(text)
+    # explicit offset or Z wins outright
+    for form in ('%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%dT%H:%M:%S.%f%z'):
+        try: return int(datetime.strptime(text, form).timestamp())
+        except ValueError: continue
+    try: return int(datetime.strptime(text, '%Y-%m-%dT%H:%M:%SZ')
+                    .replace(tzinfo=timezone.utc).timestamp())
+    except ValueError: pass
+    # ps-style wall clock, no zone
+    try:
+        moment = datetime.strptime(text, '%a %b %d %H:%M:%S %Y')
+        if source == 'record': moment = moment.replace(tzinfo=timezone.utc)
+        return int(moment.timestamp())
+    except ValueError: return None
 
 
 def command(argv):
@@ -44,9 +96,20 @@ def native_record(pid, directory=None):
         sid = data.get('sessionId')
         if not isinstance(sid, str) or not UUID.fullmatch(sid): return None
         cwd = safe_path(data.get('cwd'))
+        # procStart in Claude's record is a UTC wall-clock string
+        # ('Tue Oct  6 18:14:54 2026'); parse it AS UTC so it matches a live
+        # `ps -lstart` (which renders the same instant in local time). Falls
+        # back to the ms epoch startedAt. None when absent/unparseable: the
+        # identity stays unasserted, never guessed.
+        epoch = normalize_birth(data.get('procStart', ''), source='record')
+        if epoch is None:
+            value = data.get('startedAt')
+            if isinstance(value, (int, float)) and 10**11 < value < 10**14:
+                epoch = int(value // 1000)
         return {'pid': pid, 'id': sid.lower(), 'cwd': cwd,
                 'name': sanitize(data.get('name', ''))[:120] if isinstance(data.get('name'), str) else '',
-                'busy': data.get('busy') if type(data.get('busy')) is bool else None}
+                'busy': data.get('busy') if type(data.get('busy')) is bool else None,
+                'epoch_hint': epoch}
     except (OSError, ValueError, __import__('switcher').host.Denied): return None
     finally:
         if fd is not None: os.close(fd)
@@ -78,10 +141,10 @@ def collect(execute=command, platform=None, records=None):
                 name = Path(executable.strip()).name
                 if (name in ('claude', 'claude-code') or '/.local/share/claude/versions/' in executable) and not status.startswith('Z'):
                     pid = int(parts[0]); item['pids'].append(pid)
-                    # Stable process birth metadata helps detect PID reuse; never matches UUID by time.
-                    born = execute(['/bin/ps', '-p', str(pid), '-o', 'lstart=']).strip()
-                    if not born: raise ValueError('Process birth unavailable')
-                    item['process_identity'][pid] = born
+                    # Birth is normalized to UTC epoch: Claude's records use UTC,
+                    # ps reports local time, and raw-string comparison would split
+                    # one live process into two identities. Never matches UUID by time.
+                    item['process_identity'][pid] = birth_epoch(pid, execute)
                     record = records(pid)
                     if record: item['candidates'].append(record)
             item['process'] = 'Claude process present' if item['pids'] else 'no identifiable Claude process'

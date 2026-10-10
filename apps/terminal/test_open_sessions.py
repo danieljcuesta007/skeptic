@@ -5,6 +5,12 @@ import open_sessions as live
 import switcher
 ROW=dict(window=12,tab=2,tty='/dev/ttys003',busy=True)
 SID='11111111-2222-3333-4444-555555555555'
+# One live process observed two ways: ps renders local time, Claude's native
+# record stores procStart in UTC. They must normalize to the SAME epoch or a
+# single running Claude is treated as two different processes and window
+# association silently degrades to UNCONFIRMED.
+PS_LOCAL='Tue Oct  6 14:14:54 2026'
+PROC_UTC='Tue Oct  6 18:14:54 2026'
 class OpenTests(unittest.TestCase):
     def test_metadata_only(self):
         calls=[]
@@ -64,3 +70,38 @@ class OpenTests(unittest.TestCase):
             self.assertIn('One-time metadata access',result.stdout)
             self.assertIn('declined',result.stdout+result.stderr)
             self.assertNotIn('Unmatched tabs below',result.stdout)
+    def test_utc_and_local_birth_normalize_to_same_epoch(self):
+        # The regression this guards: raw strings 'Tue Oct  6 14:14:54 2026'
+        # (ps, local EDT) and 'Tue Oct  6 18:14:54 2026' (record, UTC) describe
+        # the SAME instant 4h apart. Comparing the raw strings split one process
+        # in two and silently broke window association. Parsed each in its real
+        # zone, they must resolve to one epoch.
+        self.assertEqual(live.normalize_birth(PS_LOCAL, source='ps'),
+                         live.normalize_birth(PROC_UTC, source='record'))
+        self.assertEqual(live.normalize_birth(PROC_UTC, source='record'),
+                         live.normalize_birth('2026-10-06T18:14:54Z'))
+        self.assertIsNone(live.normalize_birth('not a clock'))
+        self.assertIsNone(live.normalize_birth(''))
+    def test_native_record_exposes_normalized_epoch_hint(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as d:
+            (Path(d)/'23.json').write_text(json.dumps(
+                {'pid':23,'sessionId':SID,'cwd':'/p','name':'n','procStart':PROC_UTC,'busy':False}))
+            rec=live.native_record(23,d)
+            self.assertIsNotNone(rec)
+            # record's UTC procStart and a live ps-local birth are one instant
+            self.assertEqual(rec['epoch_hint'],live.normalize_birth(PS_LOCAL, source='ps'))
+            self.assertEqual(rec['epoch_hint'],live.normalize_birth(PROC_UTC, source='record'))
+    def test_collect_stores_epoch_identity_not_raw_string(self):
+        calls=[]
+        def execute(argv):
+            calls.append(argv)
+            if argv[0].endswith('osascript'): return json.dumps([ROW])
+            if '-t' in argv: return '23 /usr/local/bin/claude S\n'
+            if 'lstart' in ' '.join(argv): return PS_LOCAL+'\n'
+            return ''
+        rows=live.collect(execute,'darwin',records=lambda _:None)
+        self.assertEqual(rows[0]['process_identity'],{23:live.normalize_birth(PS_LOCAL)})
+        # a raw local/UTC string must never be stored as identity
+        self.assertNotIn(PS_LOCAL,str(rows[0]['process_identity']))
