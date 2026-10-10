@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 const cases = [
+ ['colored favicon','website ships only monochrome colors with contrasting secondary controls','favicon.svg', s=>s.replace('fill="#000000"','fill="#ff2800"')],
+ ['invisible primary CTA','monochrome primary CTA meets AAA contrast and preserves interaction states','style.css', s=>s.replace('color:#fff; border-color:var(--black); font-size:19px','color:#000; border-color:var(--black); font-size:19px')],
+ ['missing architecture icon','homepage architecture has decorative inline icons and responsive cards','index.html', s=>s.replace(/<svg class="architecture-icon"[\s\S]*?<\/svg>/,'')],
  ['external tracking asset','production package contains only reviewed local assets and inert signup','guide.html', s=>s.replace('</head>','<script src="https://analytics.example/tracker.js"></script></head>')],
  ['unlabeled architecture','architecture diagrams retain accessible descriptions and truthful capability status','index.html', s=>s.replace('aria-labelledby="architecture-caption"','')],
  ['false learning status','architecture diagrams retain accessible descriptions and truthful capability status','index.html', s=>s.replace('Preference learning</strong><span>Planned','Preference learning</strong><span>Implemented')],
@@ -28,4 +31,4 @@ for (const [name,expected,file,mutate] of cases) {
   console.log(`Caught UX fault: ${name}`);
  } finally { await rm(scratch,{recursive:true,force:true}); }
 }
-console.log('8/8 UX mutations caught; source files unchanged.');
+console.log(`${cases.length}/${cases.length} UX mutations caught; source files unchanged.`);

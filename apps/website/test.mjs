@@ -67,7 +67,7 @@ test('expanded marketing includes docs, compatibility and demo-only signup',()=>
  assert.match(html,/No address is collected or saved/);assert.match(html,/type="email"[^>]*disabled/);
 });
 
-test('deployment headers are built and small red text uses black contrast correction',async()=>{
+test('deployment headers and monochrome navigation preserve contrast',async()=>{
  const headers=await readFile('_headers','utf8');
  assert.match(headers,/connect-src 'none'/);assert.match(headers,/form-action 'none'/);assert.match(headers,/frame-ancestors 'none'/);
  assert.match(css,/\.step-number\{color:#000;border-left/);assert.match(css,/nav \.active\{color:#000;text-decoration/);
@@ -134,4 +134,41 @@ test('production package contains only reviewed local assets and inert signup',a
  assert.match(guide,/type="email"[^>]*disabled/);
  assert.doesNotMatch(guide,/<form[^>]+action=/);
  assert.match(await readFile('onboarding.js','utf8'),/nothing was submitted or saved/);
+});
+
+
+test('monochrome primary CTA meets AAA contrast and preserves interaction states',()=>{
+ const ratio=(1+.05)/(0+.05);
+ assert.equal(ratio,21);
+ assert.match(css,/--black:#000;/); assert.match(css,/--white:#fff;/);
+ assert.match(css,/\.button \{[^}]*background:var\(--black\); color:#fff;[^}]*font-size:19px; font-weight:700/);
+ assert.match(css,/\.button span \{ color:inherit/);
+ for(const state of ['hover','active']) assert.match(css,new RegExp('\\.button:'+state+' \\{[^}]*background:var\\(--black\\); color:#fff;'));
+ assert.match(css,/\.button:focus-visible \{ outline:3px solid #000/);
+ assert.match(css,/\.button:disabled,\.button\[aria-disabled="true"\] \{[^}]*background:#505050; color:#fff;[^}]*opacity:1/);
+});
+test('homepage architecture has decorative inline icons and responsive cards',()=>{
+ const figure=home.match(/<figure class="architecture premium-architecture"[\s\S]*?<\/figure>/)?.[0];
+ assert.ok(figure);
+ const icons=figure.match(/<svg\b[^>]*>/g)||[];
+ assert.equal(icons.length,15);
+ for(const svg of icons) { assert.match(svg,/aria-hidden="true"/); assert.match(svg,/focusable="false"/); assert.match(svg,/viewBox="0 0 24 24"/); }
+ assert.equal((figure.match(/<li>/g)||[]).length,13);
+ assert.match(css,/\.premium-architecture \.capability-grid li \{[^}]*border:1px solid/);
+ assert.match(css,/@media\(max-width:560px\)[\s\S]*\.premium-architecture \.capability-grid \{ grid-template-columns:minmax\(0,1fr\)/);
+ assert.match(css,/@media\(max-width:360px\)[\s\S]*\.premium-architecture \.knowledge-cards/);
+});
+
+// Palette regression covers every shipped CSS/SVG/HTML asset, including the favicon.
+test('website ships only monochrome colors with contrasting secondary controls',async()=>{
+ const assets=css+home+guide+await readFile('favicon.svg','utf8');
+ for(const match of assets.matchAll(/#([0-9a-f]{3,8})\b/gi)) {
+  const hex=match[1];if(![3,4,6,8].includes(hex.length))continue;
+  const channels=hex.length<=4?hex.slice(0,3).split(''):[hex.slice(0,2),hex.slice(2,4),hex.slice(4,6)];
+  assert.equal(new Set(channels.map(c=>c.toLowerCase())).size,1,`Non-neutral color: ${hex}`);
+ }
+ assert.doesNotMatch(assets,/--red|(?:color|background|fill|stroke)\s*[:=]\s*["']?(?:red|blue|green)|(?:rgb|hsl)a?\(/i);
+ assert.match(css,/\.outline-button \{ background:white; color:black/);
+ assert.match(css,/:focus-visible \{ outline:3px solid var\(--black\); outline-offset:4px/);
+ assert.match(css,/input \{ accent-color:var\(--black\)/);
 });

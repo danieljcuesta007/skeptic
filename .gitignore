@@ -17,3 +17,4 @@ credentials.json
 *.pem
 *.key
 .skeptic-cache/
+.skeptic-local/

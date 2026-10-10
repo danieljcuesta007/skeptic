@@ -128,3 +128,12 @@ Build/tests, static privacy review, truthful pre-alpha labels and source-level
 navigation checks passed. Browser/visual/keyboard acceptance, real demo interaction,
 correct account identity/permissions, explicit project/public deployment approval and
 hosted header behavior are NOT VERIFIED. **Stop at readiness; not launched.**
+
+## Updated local artifact — 2026-10-09T15:22:48+00:00
+
+User-observed visual corrections implemented under Step 43A; full validation 72 tests /
+64 mutations passed. Rebuilt eight-asset ZIP/manifest match source/dist (55,955 bytes);
+ZIP SHA-256 `69ac4a1f01ff45ef0fa9733cc432b0c2578dd846cf437704832737cf78b214af`. Prior hashes superseded.
+Browser feedback does not complete acceptance; revised rendered checks and all
+account/target/manual-acceptance/public-upload approval gates remain pending.
+No deployment. See `BROWSER-ACCEPTANCE.md`.
