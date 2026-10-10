@@ -264,6 +264,16 @@ class ServerTests(Fixture):
         try: return response.status, dict(response.getheaders()), response.read()
         finally: response.close()
 
+    def test_continuity_read_only_token_and_unknown_state(self):
+        status,_,body=self.request('POST','/api/continuity',{})
+        self.assertEqual(status,200);data=json.loads(body)
+        self.assertEqual(data['engine'],'unconnected');self.assertEqual(data['sessions'],[])
+        self.assertFalse(data['capabilities']['live_switch'])
+        status,_,_=self.request('POST','/api/continuity',{},headers={'X-Skeptic-Token':'wrong'})
+        self.assertEqual(status,400)
+        status,_,_=self.request('POST','/api/continuity',{'path':'/etc/passwd'})
+        self.assertEqual(status,400)
+
     def test_usage_route_requires_session_and_refuses_extra_fields(self):
         status,_,body=self.request('POST','/api/usage',{'op':'read'})
         self.assertEqual(status,200);self.assertFalse(json.loads(body)['local_enabled'])

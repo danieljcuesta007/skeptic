@@ -14,6 +14,11 @@ def serve(state, lease, output):
         if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or info.st_uid!=os.getuid() or stat.S_IMODE(info.st_mode)!=0o600:raise Denied('Unsafe lock')
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         with LocalServer(registry,0) as server:
+            fixture=os.environ.get('SKEPTIC_FIXTURE_ENGINE')
+            if fixture:
+                sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terminal'))
+                from checkpoint_writer import fixture as validate_fixture
+                server.continuity_fixture=validate_fixture(fixture)
             worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
             output.write(json.dumps({'origin':server.origin})+'\n');output.flush()
             try:

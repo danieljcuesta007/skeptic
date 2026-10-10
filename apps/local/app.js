@@ -72,7 +72,7 @@ $('generate').addEventListener('click',()=>run(()=>generate($('provider').value)
 $('claude-resume').addEventListener('click',()=>run(()=>generate('Claude Code')));$('codex-resume').addEventListener('click',()=>run(()=>generate('Codex')));
 ['task','provider'].forEach(id=>$(id).addEventListener('input',clearPrompt));
 $('copy').addEventListener('click',()=>run(async()=>{try{await navigator.clipboard.writeText($('prompt').value);message('Copied. Paste into your tool when ready.');}catch{$('prompt').focus();$('prompt').select();message('Press Command–C to copy the selected prompt.');}}));
-run(async()=>{const response=await fetch('/api/session');if(!response.ok)throw new Error('Use the exact 127.0.0.1 address.');token=(await response.json()).token;policyExplanation();await refresh();message('Connect My Workspace to approve your existing vault and repository roots. No discovery before approval.');});
+run(async()=>{const response=await fetch('/api/session');if(!response.ok)throw new Error('Use the exact 127.0.0.1 address.');token=(await response.json()).token;policyExplanation();await refresh();await refreshContinuity();message('Connect My Workspace to approve your existing vault and repository roots. No discovery before approval.');});
 
 let usageSnapshot;
 async function usageApi(data){const r=await fetch('/api/usage',{method:'POST',headers:{'Content-Type':'application/json','X-Skeptic-Token':token},body:JSON.stringify(data)});const body=await r.json();if(!r.ok)throw new Error(body.error);return body;}
@@ -132,3 +132,24 @@ $('appearance').addEventListener('change', () => run(async () => { desktopPrefer
 $('welcome-done').addEventListener('click', () => run(async () => { desktopPreferences = await preferenceRequest({action:'save',theme:desktopPreferences.theme,welcomed:true}); applyAppearance(); }));
 $('help-toggle').addEventListener('click', () => { $('command-guide').hidden = !$('command-guide').hidden; });
 run(async () => { desktopPreferences = await preferenceRequest({action:'get'}); applyAppearance(); });
+
+async function refreshContinuity(){
+ const status=$('continuity-status'),list=$('continuity-sessions');
+ try{
+  const response=await fetch('/api/continuity',{method:'POST',headers:{'Content-Type':'application/json','X-Skeptic-Token':token},body:'{}'});
+  if(!response.ok)throw new Error('Engine unavailable');
+  const data=await response.json();
+  status.textContent=`${data.engine} · ${data.monitoring} · ${data.sessions.length} observed sessions`;
+  list.replaceChildren(...data.sessions.map(s=>{
+   const card=node('details',undefined,'source-card');card.append(node('summary',`${s.project} · ${s.agent} · ${s.readiness}`));
+   card.append(node('p',`Activity: ${s.activity} · verification: ${s.verification} · checkpoint: ${s.checkpoint_fresh?'fresh':'stale'} · dirty work: ${s.dirty?'present':'none observed'}`));
+   card.append(node('p',s.objective),node('p',s.cwd,'path'),node('p',`Writer: ${s.writer}`));
+   card.append(node('h3','Outstanding work'),...s.pending.map(t=>node('p',t)),node('h3','Handoff blockers'),...s.blocked_reasons.map(t=>node('p',t)));
+   return card;
+  }));
+ }catch(error){status.textContent='Engine disconnected · readiness unknown';list.replaceChildren();}
+}
+$('continuity-refresh').addEventListener('click',()=>run(refreshContinuity));
+setInterval(()=>{if(token&&!busy)refreshContinuity();},5000);
+
+$('continuity-compact').addEventListener('click',()=>{const on=document.body.classList.toggle('continuity-focus');$('continuity-compact').setAttribute('aria-pressed',String(on));$('continuity-compact').textContent=on?'Full workspace':'Compact view';});

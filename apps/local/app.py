@@ -536,7 +536,14 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(int(lengths[0])))
             if not isinstance(data, dict): raise Denied('Request object required')
             registry = self.server.registry
-            if self.path == '/api/preferences':
+            if self.path == '/api/continuity':
+                if data != {}:raise Denied('Observation request accepts no fields')
+                import sys
+                from pathlib import Path
+                sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terminal'))
+                from continuity_service import load_observation
+                self.reply(200,load_observation(getattr(self.server,'continuity_fixture',None)))
+            elif self.path == '/api/preferences':
                 self.reply(200, self.server.preferences.request(data))
             elif self.path == '/api/usage':
                 self.reply(200, self.server.usage.request(data))

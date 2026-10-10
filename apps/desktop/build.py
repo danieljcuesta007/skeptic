@@ -3,7 +3,7 @@ from pathlib import Path
 import plistlib,shutil,subprocess,sys
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[1]
-FILES=['apps/desktop/backend.py','apps/local/app.py','apps/local/workspace.py','apps/local/usage.py','apps/local/preferences.py','apps/local/index.html','apps/local/app.js','apps/local/style.css','packages/discovery/engine.py']
+FILES=['apps/terminal/checkpoints.py','apps/terminal/checkpoint_writer.py','apps/terminal/recovery_contract.py','apps/terminal/continuity_adapters.py','apps/terminal/continuity_service.py','apps/desktop/backend.py','apps/local/app.py','apps/local/workspace.py','apps/local/usage.py','apps/local/preferences.py','apps/local/index.html','apps/local/app.js','apps/local/style.css','packages/discovery/engine.py']
 def build(destination=None):
     target=Path(destination or HERE/'dist/Skeptic.app')
     if target.is_symlink():raise ValueError('Symlink output refused')
