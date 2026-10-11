@@ -45,3 +45,15 @@ class Service(unittest.TestCase):
    with self.assertRaises(c.Rejected):service.load_observation(root)
  def test_default_never_discovers(self):
   self.assertEqual(service.load_observation(None)['sessions'],[]);self.assertEqual(service.load_observation(None)['monitoring'],'disabled')
+
+ def test_future_and_nonfinite_heartbeat_not_running(self):
+  with tempfile.TemporaryDirectory() as t:
+   root=Path(t);root.chmod(0o700)
+   for stamp in (time.time()+1000,float('nan'),float('inf'),True):
+    service.atomic(root,'observation.json',{'version':1,'sessions':[],'observed_epoch':stamp})
+    self.assertEqual(service.load_observation(root)['engine'],'disconnected')
+ def test_linked_token_refused(self):
+  with tempfile.TemporaryDirectory() as t:
+   root=Path(t);service.atomic(root,'token.json',{'token':'fixture'})
+   os.link(root/'token.json',root/'linked.json')
+   with self.assertRaises(c.Rejected):service.read_private(root/'token.json')

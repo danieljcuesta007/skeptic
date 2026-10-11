@@ -28,6 +28,7 @@ def complete(package,assessment,acknowledgement,reviewed_hash):
  if assessment!=assess(package,assessment['destination'],'confirmed','clear',True):raise c.Rejected('Assessment invalid or blocked')
  if assessment['state']!='awaiting_approval' or reviewed_hash!=package['fingerprint']:raise c.Rejected('Exact package approval required')
  if not isinstance(acknowledgement,dict) or acknowledgement.get('package')!=reviewed_hash or acknowledgement.get('agent')!=assessment['destination'] or acknowledgement.get('source_fingerprint')!=package['snapshot']['fingerprint'] or acknowledgement.get('pending')!=package['pending']:raise c.Rejected('Destination has not reconciled')
+ if acknowledgement.get('version')!=1 or acknowledgement.get('project_id')!=package['snapshot']['project_id'] or acknowledgement.get('checkout')!=package['snapshot']['root'] or not isinstance(acknowledgement.get('session_id'),str) or not acknowledgement['session_id'].strip():raise c.Rejected('Destination identity not reconciled')
  if not c.fresh(package['snapshot']):raise c.Rejected('Source changed before completion')
  return {'state':'handoff_complete','verification':'offline_contract_only','package':reviewed_hash,'acknowledgement':acknowledgement}
 
@@ -45,5 +46,5 @@ def observation(packages):
   c.markdown(p);s=p['snapshot'];is_fresh=c.fresh(s)
   receipts=[c.receipt_state(r,s) for r in p['receipts']]
   readiness=assess(p,'hermes','unknown',p['writer'],False)
-  sessions.append({'id':p['session'],'agent':p['agent'],'project':s['project_id'],'objective':p['objective'],'cwd':s['root'],'activity':'unknown','last_activity':None,'checkpoint':p['timestamp'],'checkpoint_fresh':is_fresh,'verification':'stale' if 'stale' in receipts else 'failed' if 'command_failed' in receipts else 'command_passed' if receipts else 'unknown','dirty':bool(s['status_hex']),'pending':p['pending'],'failures':p['failures'],'writer':p['writer'],'readiness':readiness['state'],'blocked_reasons':readiness['reasons'],'uncertainty':p['uncertainty']})
+  sessions.append({'id':p['session'],'agent':p['agent'],'project':s['project_id'],'objective':p['objective'],'cwd':s['root'],'activity':'unknown','last_activity':None,'checkpoint':p['timestamp'],'checkpoint_fresh':is_fresh,'verification':'stale' if 'stale' in receipts else 'failed' if 'command_failed' in receipts else 'command_passed' if receipts else 'unknown','verification_provenance':[r['provenance'] for r in p['receipts']],'dirty':bool(s['status_hex']),'pending':p['pending'],'failures':p['failures'],'writer':p['writer'],'readiness':readiness['state'],'blocked_reasons':readiness['reasons'],'uncertainty':p['uncertainty']})
  return {'version':1,'engine':'offline_fixture','monitoring':'disabled','sessions':sessions,'capabilities':{'live_switch':False,'pause_monitoring':False,'checkpoint_write':'fixture_only'}}

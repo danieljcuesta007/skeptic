@@ -9,7 +9,10 @@ for name,file,old,new,test in faults:
   for source in HERE.glob('*.py'):shutil.copy2(source,root/source.name)
   text=(root/file).read_text()
   if old not in text:raise SystemExit('Mutation anchor missing: '+name)
-  (root/file).write_text(text.replace(old,new,1))
+  mutated=text.replace(old,new,1)
+  if name=='launch_counts_as_ack':
+   mutated='\n'.join(line for line in mutated.split('\n') if "raise c.Rejected('Destination identity not reconciled')" not in line)
+  (root/file).write_text(mutated)
   # sessions/app dependencies are original modules; mutation files remain first on sys.path.
   env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',PYTHONPATH=str(HERE)+os.pathsep+str(HERE.parent/'local'))
   result=subprocess.run([sys.executable,'-B','-m','unittest',test],cwd=root,env=env,capture_output=True,text=True,timeout=45)

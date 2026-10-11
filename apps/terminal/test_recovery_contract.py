@@ -52,3 +52,23 @@ class Recovery(unittest.TestCase):
   result=r.complete(returning,r.assess(returning,'claude','confirmed','clear',True),ack,returning['fingerprint'])
   self.assertEqual(result['state'],'handoff_complete');self.assertFalse(c.fresh(outgoing['snapshot']));self.assertEqual((self.root/'unfinished.txt').read_text(),'preserve this')
   self.assertEqual(c.receipt_state(receipt,snapshot),'command_passed');self.assertIn(b'?? unfinished.txt',self.g('status','--porcelain=v1','-z'))
+
+ def test_completion_rejects_forged_destination_identity(self):
+  p=self.package();assessment=r.assess(p,'hermes','confirmed','clear',True)
+  valid=r.reconcile(p,self.root,'fixture','destination','hermes',p['pending'],True)
+  for field,value in [('version',2),('project_id','wrong'),('checkout','/wrong'),('session_id',''),('session_id',None)]:
+   with self.subTest(field=field),self.assertRaises(c.Rejected):r.complete(p,assessment,{**valid,field:value},p['fingerprint'])
+
+ def test_real_fixture_codex_return_preserves_dirty_work(self):
+  (self.root/'code.py').write_text('codex pending = 1')
+  (self.root/'untracked.txt').write_text('keep')
+  self.g('add','code.py')
+  old=c.proposal(self.snap(['STATUS.md','code.py','untracked.txt']),'claude','claude-start','continue',pending=['finish'],writer='clear')
+  ack=r.reconcile(old,self.root,'fixture','codex-dest','codex',old['pending'],True)
+  before=self.g('status','--porcelain=v1','-z');r.complete(old,r.assess(old,'codex','confirmed','clear',True),ack,old['fingerprint']);self.assertEqual(before,self.g('status','--porcelain=v1','-z'))
+  (self.root/'code.py').write_text('codex completed = 2')
+  new=c.proposal(self.snap(['STATUS.md','code.py','untracked.txt']),'codex','codex-dest','review',pending=['review'],writer='clear')
+  ack=r.reconcile(new,self.root,'fixture','claude-return','claude',new['pending'],True)
+  self.assertEqual(r.complete(new,r.assess(new,'claude','confirmed','clear',True),ack,new['fingerprint'])['verification'],'offline_contract_only')
+  self.assertFalse(c.fresh(old['snapshot']));self.assertEqual((self.root/'untracked.txt').read_text(),'keep')
+  with self.assertRaises(c.Rejected):r.complete(new,r.assess(new,'claude','confirmed','clear',True),{**ack,'pending':[]},new['fingerprint'])

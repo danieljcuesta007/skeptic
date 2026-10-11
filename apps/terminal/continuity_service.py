@@ -1,6 +1,6 @@
 """Standalone fixture-only observer. No login install, private history or provider calls."""
 from pathlib import Path
-import argparse,fcntl,json,os,select,sys,time
+import argparse,fcntl,json,math,os,select,sys,time
 import checkpoint_writer as writer
 import checkpoints as c
 import recovery_contract as recovery
@@ -11,7 +11,7 @@ def read_private(path):
  try:
   s=os.fstat(fd)
   import stat
-  if not stat.S_ISREG(s.st_mode) or s.st_uid!=os.getuid() or stat.S_IMODE(s.st_mode)!=0o600 or s.st_size>LIMIT:raise c.Rejected('Private bounded file required')
+  if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_uid!=os.getuid() or stat.S_IMODE(s.st_mode)!=0o600 or s.st_size>LIMIT:raise c.Rejected('Private bounded file required')
   with os.fdopen(fd,'rb',closefd=False) as f:raw=f.read(LIMIT+1)
   if len(raw)>LIMIT:raise c.Rejected('Oversized state')
   return json.loads(raw)
@@ -34,7 +34,7 @@ def load_observation(root):
  if not isinstance(data,dict) or data.get('version')!=1 or not isinstance(data.get('sessions'),list):raise c.Rejected('Invalid observation schema')
  # Never treat a stale persisted snapshot as a running engine.
  stamp=data.get('observed_epoch')
- if not isinstance(stamp,(int,float)) or time.time()-stamp>5:
+ if type(stamp) not in (int,float) or not math.isfinite(stamp) or not 0<=time.time()-stamp<=5:
   return {'version':1,'engine':'disconnected','monitoring':'unknown','sessions':[],'capabilities':{'live_switch':False,'pause_monitoring':False}}
  return data
 
