@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-final class App: NSObject, NSApplicationDelegate, WKNavigationDelegate {
+final class App: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     var window: NSWindow!
     var process: Process?
     var lease: Pipe?
@@ -15,6 +15,7 @@ final class App: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         window.center()
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
+        config.userContentController.add(self, name:"skepticLayout")
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         web = WKWebView(frame:window.contentView!.bounds, configuration:config)
         web.autoresizingMask = [.width,.height]
@@ -46,7 +47,17 @@ final class App: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             DispatchQueue.main.async {self?.origin=url;self?.web.load(URLRequest(url:url))}
         }
     }
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "skepticLayout", let action=message.body as? String,
+              let url=message.frameInfo.request.url, let allowed=origin,
+              url.scheme==allowed.scheme, url.host==allowed.host, url.port==allowed.port else {return}
+        if action == "compact" {window.minSize=NSSize(width:480,height:360);window.setContentSize(NSSize(width:520,height:640))}
+        else if action == "full" {window.minSize=NSSize(width:680,height:560);window.setContentSize(NSSize(width:1120,height:780))}
+    }
     func fail() {
+        if ProcessInfo.processInfo.environment["SKEPTIC_ACCEPTANCE"] == "1" {
+            fputs("SKEPTIC_ACCEPTANCE_STARTUP_FAILED\n", stderr);NSApp.terminate(nil);return
+        }
         let alert=NSAlert();alert.messageText="Skeptic could not start"
         alert.informativeText="Close any other Skeptic app and try again. This development app requires macOS Python 3 and permission to bind a private loopback server. No project or session files were changed."
         alert.runModal();NSApp.terminate(nil)

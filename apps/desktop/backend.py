@@ -4,6 +4,13 @@ import fcntl,json,os,sys,threading
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'local'))
 from app import Registry,LocalServer,Denied
 
+def selected_state():
+    value=os.environ.get('SKEPTIC_DESKTOP_STATE')
+    if not value:return Path.home()/'.skeptic-desktop'
+    sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terminal'))
+    from continuity_socket import private_root
+    return private_root(value)
+
 def serve(state, lease, output):
     registry=Registry(state)
     lock=None
@@ -19,6 +26,11 @@ def serve(state, lease, output):
                 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terminal'))
                 from checkpoint_writer import fixture as validate_fixture
                 server.continuity_fixture=validate_fixture(fixture)
+            socket_root=os.environ.get('SKEPTIC_FIXTURE_SOCKET')
+            if socket_root:
+                sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terminal'))
+                from continuity_socket import Client
+                server.continuity_client=Client(socket_root)
             worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
             output.write(json.dumps({'origin':server.origin})+'\n');output.flush()
             try:
@@ -30,6 +42,6 @@ def serve(state, lease, output):
         registry.close()
 
 if __name__=='__main__':
-    try:serve(Path.home()/'.skeptic-desktop',sys.stdin.buffer,sys.stdout)
+    try:serve(selected_state(),sys.stdin.buffer,sys.stdout)
     except (Denied,OSError,ValueError):
         print('Skeptic could not start safely. Another app may be open, or local access was denied.',file=sys.stderr);sys.exit(1)

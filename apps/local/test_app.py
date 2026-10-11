@@ -274,6 +274,34 @@ class ServerTests(Fixture):
         status,_,_=self.request('POST','/api/continuity',{'path':'/etc/passwd'})
         self.assertEqual(status,400)
 
+    def test_continuity_http_uses_actual_fixture_engine_state(self):
+        import sys
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terminal'))
+        import checkpoints as checkpoints
+        import test_checkpoints as fixture_tools
+        from continuity_socket import Engine
+        fixture=fixture_tools.Checkpoints('test_claims');fixture.setUp();self.addCleanup(fixture.doCleanups)
+        package=checkpoints.proposal(fixture.snap(),'claude','one','continue',pending=['finish'],writer='unknown')
+        self.server.continuity_client=Engine([package])  # Only transport boundary replaced.
+        status,_,body=self.request('POST','/api/continuity',{})
+        self.assertEqual(status,200);self.assertEqual(json.loads(body)['sessions'][0]['project'],'fixture')
+        (fixture.root/'code.py').write_text('changed after checkpoint')
+        status,_,body=self.request('POST','/api/continuity',{})
+        self.assertFalse(json.loads(body)['sessions'][0]['checkpoint_fresh'])
+        status,_,body=self.request('POST','/api/continuity/control',{'op':'prepare','session':'one','destination':'hermes'})
+        self.assertEqual(json.loads(body)['delivery'],'not_sent');self.assertIn('Source changed after review',json.loads(body)['assessment']['reasons'])
+
+    def test_continuity_control_first_request_and_rejection(self):
+        class FixtureClient:
+            def request(self, data): return {'monitoring':'paused'}
+        self.server.continuity_client=FixtureClient()
+        status,_,body=self.request('POST','/api/continuity/control',{'op':'pause'})
+        self.assertEqual(status,200);self.assertEqual(json.loads(body)['monitoring'],'paused')
+        for data in ({'op':'shutdown'},{'op':'pause','session':'wrong'},{'op':'prepare'},{'op':['pause']}):
+            status,_,_=self.request('POST','/api/continuity/control',data);self.assertEqual(status,400)
+        self.server.continuity_client=None
+        status,_,_=self.request('POST','/api/continuity/control',{'op':'pause'});self.assertEqual(status,400)
+
     def test_usage_route_requires_session_and_refuses_extra_fields(self):
         status,_,body=self.request('POST','/api/usage',{'op':'read'})
         self.assertEqual(status,200);self.assertFalse(json.loads(body)['local_enabled'])

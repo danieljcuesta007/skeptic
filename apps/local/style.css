@@ -19,3 +19,5 @@ input[type=checkbox] { accent-color:var(--ink); }
 .continuity-panel{border:1px solid var(--line,#888);border-radius:18px;padding:24px;margin:24px 0}.continuity-panel details{margin-top:12px}.continuity-panel summary{cursor:pointer;font-weight:600}.continuity-panel p{overflow-wrap:anywhere}
 
 body.continuity-focus aside,body.continuity-focus main> :not(#continuity-panel){display:none!important}body.continuity-focus .layout{display:block}body.continuity-focus main{max-width:620px;margin:auto;padding:20px}body.continuity-focus .continuity-panel{margin:0}body.continuity-focus .heading{flex-wrap:wrap;gap:12px}
+
+.continuity-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:24rem;overflow:auto;}
