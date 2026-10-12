@@ -81,7 +81,7 @@ def observe(state, summary, docs):
     if identity is not None and git.get('changes'):
         fd = host.open_directory(repo)
         try:
-            if list(host.Engine.sig(os.fstat(fd))[:2]) != identity: raise host.Denied('Repository identity changed')
+            if not host.identity_matches(identity, os.fstat(fd)): raise host.Denied('Repository identity changed')
             with host.ScopedEngine(repo, fd, []) as engine:
                 for row in git['changes'].splitlines()[:32]:
                     relative = row[3:]

@@ -68,8 +68,13 @@ class Access:
             if not isinstance(key, str) or not isinstance(value, list) or len(value) != 2 or any(not isinstance(n, int) for n in value): raise host.Denied('Invalid session consent')
 
     def consent(self, key, info, message):
-        identity = [info.st_dev, info.st_ino]
-        if self.force_prompt or self.data['grants'].get(key) != identity:
+        identity = host.durable_identity(info)
+        stored = self.data['grants'].get(key)
+        if not self.force_prompt and stored != identity and host.identity_matches(stored, info):
+            self.data['grants'][key] = identity  # pre-durable grant: upgrade, no prompt
+            atomic_json(self.state, 'sessions.json', self.data)
+            stored = identity
+        if self.force_prompt or stored != identity:
             if not sys.stdin.isatty(): raise host.Denied('Session approval required in a second Terminal; original Claude can stay open')
             print(sanitize(message))
             print('Persistent permission; revoke with: skeptic sessions revoke')
@@ -83,7 +88,7 @@ class Access:
     def check(self, key, info):
         # Fresh read defeats revocation by another terminal between selection and launch.
         current = self.state.read('sessions.json', {'grants': {}})
-        if current.get('grants', {}).get(key) != [info.st_dev, info.st_ino]: raise host.Denied('Session access revoked or source replaced')
+        if not host.identity_matches(current.get('grants', {}).get(key), info): raise host.Denied('Session access revoked or source replaced')
 
 
 def open_file(root, relative):
@@ -229,7 +234,7 @@ class ClaudeAdapter:
             snapshot_hash = hashlib.sha256(b''.join(str(offset).encode() + b'\0' + body for offset, body in chunks)).hexdigest()
             extracted = extract_claude(rows, session['id'], inventory=True) if inventory and self.source == 'claude' else self.extract(rows, session['id'])
             if not extracted['records']: raise host.Denied('Selected transcript has no accessible conversation text/tool summaries')
-            return {**session, **extracted, 'root': str(self.root), 'access_key': key, 'identity': [info.st_dev, info.st_ino],
+            return {**session, **extracted, 'root': str(self.root), 'access_key': key, 'identity': host.durable_identity(info),
                     'snapshot_sha256': snapshot_hash, 'byte_windows': [[off, len(body)] for off, body in chunks],
                     'snapshot_size': info.st_size, 'partial': info.st_size > SNAPSHOT_LIMIT, 'malformed_records': malformed,
                     'appended_during_read': os.fstat(fd).st_size > info.st_size}
@@ -256,7 +261,7 @@ class ClaudeAdapter:
         fd, info = open_file(self.root, snapshot['path'])
         try:
             access.check(snapshot['access_key'], info)
-            if [info.st_dev, info.st_ino] != snapshot['identity'] or info.st_size < snapshot['snapshot_size']: raise host.Denied('Session source replaced or shortened; prepare a fresh handoff')
+            if not host.identity_matches(snapshot['identity'], info) or info.st_size < snapshot['snapshot_size']: raise host.Denied('Session source replaced or shortened; prepare a fresh handoff')
             chunks = [(off, os.pread(fd, length, off)) for off, length in snapshot['byte_windows']]
             digest = hashlib.sha256(b''.join(str(off).encode() + b'\0' + body for off, body in chunks)).hexdigest()
             if digest != snapshot['snapshot_sha256']: raise host.Denied('Selected transcript snapshot changed; prepare a fresh handoff')
