@@ -1,4 +1,17 @@
-# Cloudflare Pages readiness — prepared, not deployed
+# Cloudflare Pages — deployed 12 Oct 2026
+
+Live at https://skeptic.pages.dev on Daniel's personal Cloudflare account
+(project `skeptic`). Deployed by direct upload of the built `dist` (8 files):
+`npx wrangler pages deploy dist --project-name skeptic --branch main`
+with `CLOUDFLARE_ACCOUNT_ID` set to the personal account. No Git connection
+(the private repository is never linked), no custom domain, no functions or
+secrets. Redeploy the same way after `npm run build`; roll back by redeploying
+an earlier build or from the Pages dashboard. Take it down with
+`npx wrangler pages project delete skeptic`.
+
+The plan below is kept for the custom-domain and separate-repository steps.
+
+# Original readiness plan
 
 ## Build and environment
 

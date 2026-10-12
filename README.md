@@ -48,7 +48,8 @@ Step 43B: website eight-asset build/18 tests/11 mutations, local three-asset bui
 with an in-memory transport; live socket/browser acceptance is pending. See the
 [local MVP report](docs/ux/STEP43B-LOCAL-MVP.md) and the
 [launch readiness report](docs/ux/STEP43A-LAUNCH-READINESS.md).
-Browser acceptance and Cloudflare deployment remain blocked; not launched.
+Website live at https://skeptic.pages.dev (Step 47; browser acceptance and live headers verified).
+Is it safe to switch right now? Run `skeptic ready` (Step 46).
 
 Approved identity: black and white with supporting neutral grays. “Not everything
 is black and white.” Existing layouts and truthful implementation labels are retained.

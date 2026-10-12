@@ -1,4 +1,21 @@
-# Step 43A browser acceptance — NOT PASSED / browser unavailable
+# Step 43A browser acceptance — PASSED in Chrome, 12 Oct 2026
+
+Run by Claude in Chrome against the local preview (127.0.0.1:4173), then live
+headers checked on https://skeptic.pages.dev:
+
+- index.html and guide.html at 1440 px and, in same-origin frames, 390 and 320 px:
+  no horizontal overflow, no element past the viewport, skip link present.
+- Walkthrough: all eight steps (Claude Code / Obsidian vault / Full brain path);
+  Next before a required choice shows "Choose an option to continue."; Back
+  keeps choices; "Try another path" returns to step 1.
+- 14/14 FAQ items open and close. Signup email is disabled and its form has no
+  action; nothing is submitted.
+- No third-party requests (Resource Timing); no console errors.
+- Live: CSP default-src 'none' (self-only scripts/styles/images, connect-src
+  none, form-action none, frame-ancestors none), nosniff, no-referrer, DENY
+  framing, camera/mic/geolocation disabled; guide.html 308s to /guide.
+
+Not covered by automation: 200%/400% text zoom, reduced-motion, a screen reader.
 
 Step 43 default browser selection returned “No browser is available”; troubleshooting
 then confirmed the available-browser list was `[]`. No real-browser run or screenshots were
