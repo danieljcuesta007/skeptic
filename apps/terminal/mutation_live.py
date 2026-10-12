@@ -9,6 +9,7 @@ faults = [
     ('home-is-a-project', "if str(parent) == home or str(parent) == '/': return None", "if str(parent) == '/': return None", 'test_home_without_repository_needs_project'),
     ('ready-while-peer-works', "if busy_peers: blockers.append(", "if False: blockers.append(", 'test_busy_peer_in_same_repository_blocks'),
     ('loose-pid-match', "abs(expected - actual) <= 2.5", "abs(expected - actual) <= 1e9", 'test_start_time_within_tolerance_but_pid_reuse_refused'),
+    ('automation-ignored', "elif row.get('automation_pending') or row.get('queued_turns'):", "elif False:", 'test_idle_with_automatic_or_queued_work_waits'),
     ('wrong-destination', "DESTINATION = {'claude': 'codex',", "DESTINATION = {'claude': 'claude',", 'test_idle_session_in_a_repository_is_ready_with_command'),
 ]
 spec = importlib.util.spec_from_file_location('test_live_sessions', here / 'test_live_sessions.py')
