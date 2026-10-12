@@ -27,7 +27,7 @@ faults = [
  ('ignore-destination-confirmation', 'switch', '            else: cwd = candidates[choice]', '            else: cwd = candidates[0]', 'test_home_referenced_repository_confirmed'),
  ('drop-session-from-context', 'switch', "docs[session['source_key']] = session['document']", 'pass', 'test_obsidian_matching_and_context_attribution'),
  ('source-hash-not-checked', 'history', "if digest != snapshot['snapshot_sha256']:", 'if False:', 'test_changed_snapshot_blocks_launch'),
- ('identity-not-checked', 'history', "if current.get('grants', {}).get(key) != [info.st_dev, info.st_ino]:", 'if False:', 'test_permission_reuse_and_revoke'),
+ ('identity-not-checked', 'history', "if not host.identity_matches(current.get('grants', {}).get(key), info):", 'if False:', 'test_permission_reuse_and_revoke'),
  ('unbounded-snapshot', 'history', 'chunks = read_chunks(fd, info, SNAPSHOT_LIMIT)', 'chunks = read_chunks(fd, info, info.st_size)', 'test_snapshot_byte_limit'),
  ('raw-tool-result', 'history', "'detail': 'Raw tool result withheld'", "'detail': block.get('content')", 'test_visible_messages_tasks_tools_and_refs'),
  ('wrong-codex-content', 'history', "if text: records.append({**origin, 'role': payload['role'], 'untrusted_text': text})", 'if False: records.append({})', 'test_reverse_codex_adapter'),

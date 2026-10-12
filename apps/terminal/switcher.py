@@ -188,9 +188,14 @@ class State:
 
     def grant(self, path, kind, ask=input):
         path, fd = host.approve_root(str(path), vault=kind == 'vault')
-        signature = list(host.Engine.sig(os.fstat(fd))[:2])
+        info = os.fstat(fd)
+        signature = host.durable_identity(info)
         old = self.settings['grants'].get(path)
-        if old != {'kind': kind, 'identity': signature}:
+        if old and old.get('kind') == kind and host.identity_matches(old.get('identity'), info, legacy=True):
+            if old['identity'] != signature:  # pre-durable grant: upgrade in place, no prompt
+                self.settings['grants'][path] = {'kind': kind, 'identity': signature}
+                self.save()
+        else:
             if getattr(self, 'no_new_grants', False):
                 os.close(fd); raise host.Denied('Approved scope changed/revoked; refresh checkpoint manually')
             if not sys.stdin.isatty():
@@ -748,9 +753,12 @@ def main(argv=None):
                 for path, grant in state.settings['grants'].items():
                     try:
                         _, fd = host.approve_root(path, vault=grant['kind'] == 'vault')
-                        try: valid = list(host.Engine.sig(os.fstat(fd))[:2]) == grant['identity']
+                        try:
+                            info = os.fstat(fd)
+                            valid = host.identity_matches(grant['identity'], info)
+                            legacy = not valid and host.identity_matches(grant['identity'], info, legacy=True)
                         finally: os.close(fd)
-                        print(clean(path) + ': ' + ('valid' if valid else 'changed; fresh approval needed'))
+                        print(clean(path) + ': ' + ('valid' if valid else 'valid; record upgrades on next skeptic run' if legacy else 'changed; fresh approval needed'))
                     except (OSError, host.Denied): print(clean(path) + ': inaccessible')
             return 0
         model = None

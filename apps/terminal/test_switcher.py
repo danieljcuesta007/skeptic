@@ -204,6 +204,28 @@ class SwitchTests(unittest.TestCase):
         self.repo.rename(self.root / 'oldcode'); self.repo.mkdir()
         with patch('sys.stdin.isatty', return_value=False), self.assertRaises(s.host.Denied): self.state.grant(self.repo, 'repository')
 
+    def test_reboot_renumbered_device_keeps_approval(self):
+        # macOS renumbers st_dev on remount: same folder, same inode, new device.
+        info = os.stat(self.repo)
+        self.state.settings['grants'][str(self.repo)] = {'kind': 'repository', 'identity': [info.st_dev + 2, info.st_ino]}
+        with patch('sys.stdin.isatty', return_value=False):
+            _, fd = self.state.grant(self.repo, 'repository'); os.close(fd)
+        self.assertEqual(self.state.read('settings.json', {})['grants'][str(self.repo)]['identity'], s.host.durable_identity(info))
+
+    def test_legacy_inode_match_only_at_upgrade(self):
+        info = os.stat(self.repo)
+        legacy = [info.st_dev + 2, info.st_ino]
+        self.assertFalse(s.host.identity_matches(legacy, info))
+        self.assertTrue(s.host.identity_matches(legacy, info, legacy=True))
+        self.assertTrue(s.host.identity_matches(s.host.durable_identity(info), info))
+
+    def test_durable_grant_replaced_root_requires_approval(self):
+        with patch('sys.stdin.isatty', return_value=True), contextlib.redirect_stdout(io.StringIO()):
+            self.state.settings['grants'] = {}
+            _, fd = self.state.grant(self.repo, 'repository', ask=lambda prompt: 'approve'); os.close(fd)
+        self.repo.rename(self.root / 'oldcode'); self.repo.mkdir()
+        with patch('sys.stdin.isatty', return_value=False), self.assertRaises(s.host.Denied): self.state.grant(self.repo, 'repository')
+
     def test_state_symlink_refused(self):
         (self.root / 'state/settings.json').unlink()
         (self.root / 'state/settings.json').symlink_to(self.status)
