@@ -17,7 +17,7 @@ headers checked on https://skeptic.pages.dev:
 
 Not covered by automation: 200%/400% text zoom, reduced-motion, a screen reader.
 
-Step 43 default browser selection returned “No browser is available”; troubleshooting
+**Earlier (before 12 Oct):** Step 43 default browser selection returned “No browser is available”; troubleshooting
 then confirmed the available-browser list was `[]`. No real-browser run or screenshots were
 possible. Node tests prove logic and static structure, not rendered accessibility.
 
