@@ -136,6 +136,13 @@ class VerdictTests(ClaudeFixture):
         with patch.dict(os.environ, {'SKEPTIC_TAB_TITLES': '0'}):
             self.assertEqual(live.terminal_titles(run=run), {})
 
+    def test_last_active_from_transcript_or_session_record(self):
+        row = self.collect()[0]
+        path = next((self.home / '.claude/projects').rglob('*.jsonl'))
+        self.assertGreaterEqual(row['last_active'], os.stat(path).st_mtime - 1)
+        self.write_meta(status='idle', updatedAt=(os.stat(path).st_mtime + 600) * 1000)  # Claude's own record is newer
+        self.assertAlmostEqual(self.collect()[0]['last_active'], os.stat(path).st_mtime + 600, delta=1)
+
     def test_summary_prefers_ready(self):
         rows = [{'verdict': 'wait', 'source': 'claude'}, {'verdict': 'ready', 'source': 'codex'}]
         self.assertEqual(live.summary(rows)['verdict'], 'ready'); self.assertIsNone(live.summary([]))
