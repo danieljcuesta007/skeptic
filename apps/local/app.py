@@ -72,11 +72,14 @@ def durable_identity(info):
     return [info.st_ino, int(birth * 1_000_000_000) if birth is not None else info.st_dev]
 
 
-def identity_matches(stored, info):
-    """True for the durable identity, or a pre-durable [st_dev, st_ino] grant
-    whose inode still matches (callers upgrade those on their next save)."""
+def identity_matches(stored, info, legacy=False):
+    """True for the durable identity. With legacy=True (only at the two places
+    that immediately upgrade and save a grant), also a pre-durable
+    [st_dev, st_ino] grant whose inode still matches: the device number is
+    exactly what a reboot changes, and APFS never reuses inode numbers on a
+    volume. Read-only checks never take the inode-only path."""
     if not isinstance(stored, list) or len(stored) != 2: return False
-    return stored == durable_identity(info) or stored[1] == info.st_ino
+    return stored == durable_identity(info) or (legacy and stored[1] == info.st_ino)
 
 
 def approve_root(path, vault=False):

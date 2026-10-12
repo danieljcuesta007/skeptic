@@ -212,6 +212,13 @@ class SwitchTests(unittest.TestCase):
             _, fd = self.state.grant(self.repo, 'repository'); os.close(fd)
         self.assertEqual(self.state.read('settings.json', {})['grants'][str(self.repo)]['identity'], s.host.durable_identity(info))
 
+    def test_legacy_inode_match_only_at_upgrade(self):
+        info = os.stat(self.repo)
+        legacy = [info.st_dev + 2, info.st_ino]
+        self.assertFalse(s.host.identity_matches(legacy, info))
+        self.assertTrue(s.host.identity_matches(legacy, info, legacy=True))
+        self.assertTrue(s.host.identity_matches(s.host.durable_identity(info), info))
+
     def test_durable_grant_replaced_root_requires_approval(self):
         with patch('sys.stdin.isatty', return_value=True), contextlib.redirect_stdout(io.StringIO()):
             self.state.settings['grants'] = {}

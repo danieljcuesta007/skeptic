@@ -70,7 +70,7 @@ class Access:
     def consent(self, key, info, message):
         identity = host.durable_identity(info)
         stored = self.data['grants'].get(key)
-        if not self.force_prompt and stored != identity and host.identity_matches(stored, info):
+        if not self.force_prompt and stored != identity and host.identity_matches(stored, info, legacy=True):
             self.data['grants'][key] = identity  # pre-durable grant: upgrade, no prompt
             atomic_json(self.state, 'sessions.json', self.data)
             stored = identity
