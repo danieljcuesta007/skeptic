@@ -712,6 +712,9 @@ def ready_cli(args, rows=None, run=None):
     if args.go:
         if not best or not best.get('continue_command'):
             print('Nothing is ready to continue yet.', file=sys.stderr); return 2
+        # Repository continuations read the current directory: run it in the
+        # session's project, not wherever this terminal happens to be.
+        if best.get('continue_cwd'): os.chdir(best['continue_cwd'])
         return (run or main)(best['continue_command'][1:])
     return 0
 

@@ -299,7 +299,8 @@ def assess(rows):
         row['project'] = Path(project).name if project else ('Home; no repository yet' if work and os.path.realpath(work) == os.path.realpath(Path.home()) else 'Project unknown')
         blockers = []
         if row['association'] == 'unlinked': blockers.append('Conversation identity not linked')
-        elif row['source'] == 'codex': blockers.append('Confirm the linked Codex conversation is still this window')
+        # A Codex link is owner-made but pinned to PID + start time, and its turn
+        # state is read from Codex's own store; it may be ready, with a note.
         if row['activity'] == 'working': blockers.append('Source is working; do not start a competing writer')
         if row['activity'] == 'unknown': blockers.append('Turn state is not established')
         if row.get('queued_turns'): blockers.append('Codex has queued continuation; resolve it before handoff')
@@ -322,7 +323,12 @@ def assess(rows):
             row.update(readiness='needs review', verdict='needs_project', headline=f'{name} isn\'t in a repository', next_step='Open the work in a repository, or continue from your notes', continue_command=None)
         else:
             row.update(readiness='blocked', verdict='wait', headline=blockers[0], next_step=blockers[0], continue_command=None)
-        if peers and not busy_peers: row['note'] = f'{len(peers)} other idle agent(s) in this repository'
+        row['continue_cwd'] = project if row.get('continue_command') else None
+        notes = []
+        if row['source'] == 'codex' and row['association'] != 'unlinked': notes.append('Codex conversation was linked by you in Sessions')
+        if row['source'] == 'hermes': notes.append('Continues the project from notes and Git; the Hermes chat itself is not carried')
+        if peers and not busy_peers: notes.append(f'{len(peers)} other idle agent(s) in this repository')
+        if notes: row['note'] = '; '.join(notes)
         row['blocked_reasons'] = blockers
     return rows
 

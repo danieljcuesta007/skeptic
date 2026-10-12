@@ -71,6 +71,14 @@ class VerdictTests(ClaudeFixture):
         idle_peer = dict(row, id='peer', pid=43, activity='idle')
         self.assertEqual(live.assess([dict(row), idle_peer])[0]['verdict'], 'ready')
 
+    def test_linked_idle_codex_can_be_ready_and_carries_note(self):
+        row = {'id': 'c', 'agent': 'Codex', 'pid': 7, 'tty': 't', 'source': 'codex', 'association': 'owner-confirmed (not automatically verified)',
+               'activity': 'idle', 'cwd': str(self.repo), 'source_path': '/x/rollout.jsonl', 'session_id': 'c1'}
+        out = live.assess([row])[0]
+        self.assertEqual(out['verdict'], 'ready'); self.assertIn('linked by you', out['note'])
+        self.assertEqual(out['continue_command'][:5], ['skeptic', 'session', 'continue', '--source', 'codex'])
+        self.assertEqual(out['continue_cwd'], str(self.repo))
+
     def test_summary_prefers_ready(self):
         rows = [{'verdict': 'wait', 'source': 'claude'}, {'verdict': 'ready', 'source': 'codex'}]
         self.assertEqual(live.summary(rows)['verdict'], 'ready'); self.assertIsNone(live.summary([]))

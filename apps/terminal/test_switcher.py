@@ -228,7 +228,8 @@ class SwitchTests(unittest.TestCase):
 
     def test_ready_prints_verdicts_and_go_runs_best_command(self):
         ready = {'agent': 'Claude Code', 'tty': 'ttys001', 'project': 'atlas', 'headline': 'Codex can pick up atlas', 'verdict': 'ready',
-                 'continue_command': ['skeptic', 'session', 'continue', '--id', 'x', '--with', 'codex']}
+                 'continue_command': ['skeptic', 'session', 'continue', '--id', 'x', '--with', 'codex'], 'continue_cwd': str(self.repo)}
+        self.addCleanup(os.chdir, os.getcwd())
         wait = {'agent': 'Claude Code', 'tty': 'ttys002', 'project': 'beta', 'headline': 'Claude is mid-turn', 'verdict': 'wait', 'next_step': 'Wait', 'continue_command': None}
         args = type('A', (), {'json': False, 'go': True})()
         ran = []
@@ -236,6 +237,7 @@ class SwitchTests(unittest.TestCase):
             self.assertEqual(s.ready_cli(args, rows=([ready, wait], ready), run=lambda argv: ran.append(argv) or 0), 0)
         self.assertIn('Ready', out.getvalue()); self.assertIn('Codex can pick up atlas', out.getvalue())
         self.assertEqual(ran, [['session', 'continue', '--id', 'x', '--with', 'codex']])
+        self.assertEqual(os.path.realpath(os.getcwd()), os.path.realpath(self.repo))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(s.ready_cli(args, rows=([wait], wait), run=lambda argv: self.fail('ran')), 2)
 
