@@ -214,13 +214,26 @@ def claude_task(path, sid, with_cwd=False):
         start = max(0, info.st_size - LIMIT)
         chunks = os.pread(fd,LIMIT,start).splitlines()
         if start: chunks = chunks[1:]
-        task = ''; cwd = ''
+        task = ''; cwd = ''; touched = []; limit = False
         for raw in chunks:
             try: record = json.loads(raw)
             except (ValueError,UnicodeError): continue
             if not isinstance(record,dict) or record.get('sessionId') != sid: continue
             here = record.get('cwd')
             if isinstance(here,str) and here.startswith('/') and len(here) < 4096: cwd = here
+            message = record.get('message') if isinstance(record.get('message'), dict) else {}
+            blocks = message.get('content') if isinstance(message.get('content'), list) else []
+            if record.get('type') == 'assistant':
+                for block in blocks[:40]:
+                    if not isinstance(block, dict): continue
+                    if block.get('type') == 'tool_use' and isinstance(block.get('input'), dict):
+                        # Files Claude actually touched say where the work is, even
+                        # when the session itself sits in home.
+                        for key in ('file_path', 'notebook_path', 'path'):
+                            value = block['input'].get(key)
+                            if isinstance(value, str) and value.startswith('/') and len(value) < 4096: touched.append(value)
+                    if block.get('type') == 'text' and isinstance(block.get('text'), str) and LIMIT_TEXT.search(block['text'][:2000]): limit = True
+                    elif block.get('type') == 'text': limit = False
             if record.get('type') != 'user': continue
             message = record.get('message') or {}
             content = message.get('content',[]) if isinstance(message,dict) else []
@@ -229,8 +242,13 @@ def claude_task(path, sid, with_cwd=False):
                 text = ' '.join(clean(block.get('text'),1000) for block in content[:20] if isinstance(block,dict) and block.get('type')=='text')
                 if text and not text.startswith(('<local-command','<command-name','<system-reminder')): task = clean(text)
         task = task or 'Task outside bounded transcript tail; review conversation'
-        return (task, cwd) if with_cwd else task
+        if with_cwd: return task, cwd, touched, limit, info.st_mtime
+        return task
     finally: os.close(fd)
+
+
+LIMIT_TEXT = re.compile(r"(?i)(usage limit|limit reached|hit your limit|rate limit|out of (?:extra )?usage|weekly limit)")
+STALL_SECONDS = 8 * 60  # busy with no transcript writes this long: treat as frozen
 
 
 def claude_activity(meta):
@@ -251,11 +269,19 @@ def claude(agent, home, started):
     activity = claude_activity(meta)
     task = 'Task transcript unavailable; open recovery review'
     cwd = meta.get('cwd') or ''
-    work = cwd
+    work = cwd; touched = []; limit = False; written = None
     if cwd and isinstance(cwd,str) and cwd.startswith('/'):
         bucket = re.sub(r'[^a-zA-Z0-9]', '-', cwd)
-        try: task, work = claude_task(home / '.claude/projects' / bucket / (sid+'.jsonl'), sid, with_cwd=True)
+        try: task, work, touched, limit, written = claude_task(home / '.claude/projects' / bucket / (sid+'.jsonl'), sid, with_cwd=True)
         except (OSError,ValueError): pass
+    # Still in home? Use the most recent repository among files it touched.
+    if not repo_root(work):
+        for path in reversed(touched):
+            root = repo_root(os.path.dirname(path))
+            if root: work = root; break
+    stalled = activity == 'working' and written is not None and time.time() - written > STALL_SECONDS
+    if activity == 'working' and (stalled or limit):
+        row['frozen'] = 'usage limit' if limit else f'no output for {int((time.time() - written) // 60)} min'
     row.update(id='claude:'+sid+':'+str(agent['pid']),session_id=sid,title=clean(meta.get('name')) or 'Untitled Claude conversation',
                task=task,cwd=cwd,work_cwd=work or cwd,activity=activity,
                activity_evidence='Claude native session status',association='native Claude session record (PID + start time)',source='claude')
@@ -301,20 +327,23 @@ def assess(rows):
         if row['association'] == 'unlinked': blockers.append('Conversation identity not linked')
         # A Codex link is owner-made but pinned to PID + start time, and its turn
         # state is read from Codex's own store; it may be ready, with a note.
-        if row['activity'] == 'working': blockers.append('Source is working; do not start a competing writer')
+        frozen = row.get('frozen')
+        if row['activity'] == 'working' and not frozen: blockers.append('Source is working; do not start a competing writer')
         if row['activity'] == 'unknown': blockers.append('Turn state is not established')
         if row.get('queued_turns'): blockers.append('Codex has queued continuation; resolve it before handoff')
         if row.get('automation_pending'): blockers.append(row.get('automation_evidence','Automatic continuation needs review'))
         if not project: blockers.append('No repository in the session\'s current directory')
         peers = [r for r in rows if r is not row and project and repo_root(r.get('work_cwd') or r['cwd']) == project]
-        busy_peers = [r for r in peers if r['activity'] == 'working']
+        busy_peers = [r for r in peers if r['activity'] == 'working' and not r.get('frozen')]
         if busy_peers: blockers.append('Another agent is working in this repository; wait or pick one writer')
         row['writer'] = 'active' if row['activity'] == 'working' else 'conflict' if busy_peers else 'none' if row['activity'] == 'idle' else 'unknown'
         name = NAMES.get(row['source'], row['agent'])
         dest = NAMES.get(DESTINATION.get(row['source'], ''), 'another engine')
         if not blockers:
-            row.update(readiness='ready', verdict='ready', headline=f'{dest} can pick up {row["project"]}',
+            headline = f'{name} looks frozen ({frozen}); {dest} can pick up {row["project"]}' if frozen else f'{dest} can pick up {row["project"]}'
+            row.update(readiness='ready', verdict='ready', headline=headline,
                        next_step=f'Continue in {dest}', continue_command=continue_command(row, project))
+            row['destinations'] = [d for d in ('codex', 'hermes', 'claude') if d != row['source']]
         elif row['activity'] == 'working':
             row.update(readiness='blocked', verdict='wait', headline=f'{name} is mid-turn', next_step='Wait for this turn to finish', continue_command=None)
         elif row.get('automation_pending') or row.get('queued_turns'):

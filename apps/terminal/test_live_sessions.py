@@ -24,12 +24,13 @@ class ClaudeFixture(unittest.TestCase):
         meta = {'pid': 42, 'sessionId': self.sid, 'cwd': str(self.home), 'startedAt': (self.started + 1.25) * 1000, 'name': 'atlas-work', **extra}
         path = self.home / '.claude/sessions/42.json'; path.write_text(json.dumps(meta)); path.chmod(0o600)
 
-    def write_transcript(self, cwd):
+    def write_transcript(self, cwd, blocks=None, age=0):
         bucket = self.home / '.claude/projects' / ''.join(c if c.isalnum() else '-' for c in str(self.home))
         bucket.mkdir(parents=True, exist_ok=True)
         rows = [{'sessionId': self.sid, 'type': 'user', 'cwd': str(self.home), 'message': {'content': 'Ship Atlas'}},
-                {'sessionId': self.sid, 'type': 'assistant', 'cwd': cwd, 'message': {'content': []}}]
+                {'sessionId': self.sid, 'type': 'assistant', 'cwd': cwd, 'message': {'content': blocks or []}}]
         path = bucket / (self.sid + '.jsonl'); path.write_text(''.join(json.dumps(r) + '\n' for r in rows)); path.chmod(0o600)
+        if age: t = os.stat(path).st_mtime - age; os.utime(path, (t, t))
 
     def collect(self, agents=None):
         agents = agents or [{'pid': 42, 'tty': 'ttys001', 'agent': 'Claude Code'}]
@@ -84,6 +85,28 @@ class VerdictTests(ClaudeFixture):
         for extra in ({'automation_pending': True, 'automation_evidence': 'Active goal'}, {'queued_turns': 2}):
             out = live.assess([dict(base, **extra)])[0]
             self.assertEqual(out['verdict'], 'wait'); self.assertEqual(out['readiness'], 'blocked')
+
+    def test_frozen_busy_session_is_switchable_with_warning(self):
+        self.write_meta(status='busy'); self.write_transcript(cwd=str(self.repo), age=live.STALL_SECONDS + 60)
+        row = self.collect()[0]
+        self.assertEqual(row['verdict'], 'ready'); self.assertIn('looks frozen', row['headline'])
+        self.write_transcript(cwd=str(self.repo))  # fresh output: really working
+        self.assertEqual(self.collect()[0]['verdict'], 'wait')
+
+    def test_usage_limit_message_counts_as_frozen(self):
+        self.write_meta(status='busy')
+        self.write_transcript(cwd=str(self.repo), blocks=[{'type': 'text', 'text': "You've hit your limit · resets 3pm"}])
+        row = self.collect()[0]
+        self.assertEqual(row['verdict'], 'ready'); self.assertIn('usage limit', row['headline'])
+
+    def test_home_session_project_from_touched_files(self):
+        self.write_transcript(cwd=str(self.home), blocks=[{'type': 'tool_use', 'name': 'Edit', 'input': {'file_path': str(self.repo / 'src' / 'app.py')}}])
+        (self.repo / 'src').mkdir()
+        row = self.collect()[0]
+        self.assertEqual(row['project'], 'atlas'); self.assertEqual(row['verdict'], 'ready')
+
+    def test_ready_rows_offer_every_other_engine(self):
+        self.assertEqual(self.collect()[0]['destinations'], ['codex', 'hermes'])
 
     def test_summary_prefers_ready(self):
         rows = [{'verdict': 'wait', 'source': 'claude'}, {'verdict': 'ready', 'source': 'codex'}]

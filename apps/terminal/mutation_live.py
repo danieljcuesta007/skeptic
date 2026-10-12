@@ -10,6 +10,8 @@ faults = [
     ('ready-while-peer-works', "if busy_peers: blockers.append(", "if False: blockers.append(", 'test_busy_peer_in_same_repository_blocks'),
     ('loose-pid-match', "abs(expected - actual) <= 2.5", "abs(expected - actual) <= 1e9", 'test_start_time_within_tolerance_but_pid_reuse_refused'),
     ('automation-ignored', "elif row.get('automation_pending') or row.get('queued_turns'):", "elif False:", 'test_idle_with_automatic_or_queued_work_waits'),
+    ('frozen-never-switchable', "if row['activity'] == 'working' and not frozen:", "if row['activity'] == 'working':", 'test_frozen_busy_session_is_switchable_with_warning'),
+    ('ignore-touched-files', "            if root: work = root; break", "            if root: break", 'test_home_session_project_from_touched_files'),
     ('wrong-destination', "DESTINATION = {'claude': 'codex',", "DESTINATION = {'claude': 'claude',", 'test_idle_session_in_a_repository_is_ready_with_command'),
 ]
 spec = importlib.util.spec_from_file_location('test_live_sessions', here / 'test_live_sessions.py')
