@@ -1,6 +1,6 @@
 # Skeptic brand — v1, 12 Oct 2026
 
-*Not everything is black and white.* A DC Labs product, built by Daniel Cuesta with Claude.
+*Not everything is black and white.* A DC Labs product.
 Full guide: [skeptic-brand-guide.png](skeptic-brand-guide.png).
 
 | File | Use |
