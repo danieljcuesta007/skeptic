@@ -12,7 +12,7 @@
 | Step 43A — Visual Architecture & Cloudflare Website Launch | Partial; browser/Cloudflare pending and separate from the app |
 | Step 43B — Local Application MVP | Daniel authorized implementation 2026-10-09, superseding planning-only/after-website scope; local code/build and synthetic tests implemented, real socket/browser acceptance pending |
 | Step 43C — Safe Save & Tomorrow’s Handoff | Earlier saved commit/private backup verified by Daniel; newer work remains uncommitted |
-| Step 44 — Provider Onboarding Planning & Controlled Integration Design | Current canonical proposal; not authorized or executed |
+| Step 44 — Managed Multi-session Integration and Recovery Hardening | Master directive authorizes engineering; isolated temporary-project implementation and synthetic verification; PTY/native recovery/production acceptance incomplete |
 | Step 45 — Cloudflare Pages Deployment Preparation | Current canonical proposal; no deployment authorized |
 | Later | Native provider acceptance; safe installer/uninstaller; approved beta; deployment |
 

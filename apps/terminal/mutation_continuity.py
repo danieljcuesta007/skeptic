@@ -29,7 +29,7 @@ faults = [
  ('ignore-symlink-index', 'index', "data = self.state.read('transitions.json', {'version': 1, 'events': []})", "data = {'version': 1, 'events': []}", 'test_index_symlink_refused'),
  ('failed-launch-is-participation', 'index', "previous = next((e for e in reversed(relevant) if e['provider'] == provider and e.get('phase') not in ('launch_started', 'launch_failed')), None)", "previous = next((e for e in reversed(relevant) if e['provider'] == provider), None)", 'test_launch_failure_not_participation_success'),
  ('process-exit-is-success', 'index', "'verification': 'Filesystem/source snapshot observed; continuation success unknown'", "'verification': 'Continuation succeeded'", 'test_nonzero_provider_exit_unverified'),
- ('ignore-source-revocation', 'engine', "if old != {'kind': kind, 'identity': signature}:", 'if False:', 'test_permission_revocation_refuses_source_reads'),
+ ('ignore-source-revocation', 'engine', "if old and old.get('kind') == kind and host.identity_matches(old.get('identity'), info, legacy=True):", 'if True:', 'test_permission_revocation_refuses_source_reads'),
  ('no-cli-catchup', 'engine', "if target: summary['catchup'] = continuity.Index(state).briefing(state.observation, state.current_claims, target)", 'if False: pass', 'test_cli_checkpoint_and_catchup_without_provider'),
  ('ignore-root-replacement', 'index', 'key = digest([repo, identity, knowledge])', 'key = digest([repo, knowledge])', 'test_changed_root_identity_is_a_new_project'),
  ('unbounded-catchup', 'index', '    if len(json.dumps(result).encode()) <= 6000: return result', '    return result', 'test_catchup_briefing_byte_limit'),
@@ -38,6 +38,7 @@ faults = [
  ('hide-untracked-file-changes', 'engine', "'--untracked-files=all'", "'--untracked-files=normal'", 'test_untracked_directory_file_changes_detected'),
  ('send-explicit-task-secret', 'engine', 'task = filtered_task', 'task = task', 'test_explicit_task_secret_omitted'),
  ('send-without-review', 'session', "if answer != 'send':", 'if False:', 'test_session_sending_requires_review'),
+    ('hide-complete-recovery-packet', 'session', "    print('COMPLETE FILTERED RECOVERY PACKET\\n' + packet, flush=True)", '    pass', 'test_declined_send_displays_packet_without_launch_or_persistence'),
  ('send-changed-context', 'session', 'if refreshed != packet:', 'if False:', 'test_context_changed_during_review_requires_new_review'),
 ]
 sources = {'index': Path(continuity.__file__).read_text(), 'engine': Path(switcher.__file__).read_text(), 'session': Path(switcher.__file__).read_text()}

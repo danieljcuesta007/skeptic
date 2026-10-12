@@ -5,7 +5,8 @@ import test from 'node:test';
 
 // DOM is the boundary: execute the production renderer, never duplicate it here.
 class Element {
-  constructor(tag='div'){this.tag=tag;this.children=[];this.value='';this.textContent='';this.handlers={};this.attributes={};}
+  constructor(tag='div'){this.tag=tag;this.children=[];this.value='';this.textContent='';this.handlers={};this.attributes={};this.dataset={};}
+  querySelectorAll(sel){return sel==='details[open]'?this.children.filter(c=>c.tag==='details'&&c.open):[];}
   append(...children){this.children.push(...children);}
   replaceChildren(...children){this.children=children;}
   addEventListener(name,handler){this.handlers[name]=handler;}
@@ -21,6 +22,7 @@ function fixture(){
     units:s=>s.replaceAll('w.unit','"credits"'),
     remaining:s=>s.replace('meter.value=w.display_remaining','meter.value=100-w.display_remaining'),
     expired:s=>s.replace('Unknown — refresh needed','100% available'),
+    reopen:s=>s.replace('card.open=open.has(s.id);',''),
   };
   if(process.env.SKEPTIC_UI_FAULT)source=faults[process.env.SKEPTIC_UI_FAULT](source);
   vm.runInContext(source,context);
@@ -36,3 +38,17 @@ test('picker filters providers and unconnected service remains unknown',()=>{con
 test('two Hermes models retain separate units and labels as plain text',()=>{const f=fixture();const cards=f.render('hermes');assert.match(text(cards),/2 USD remaining/);assert.match(text(cards),/Provider A \/ model one/);assert.match(text(cards),/<img src=x onerror=alert\(1\)>/);assert.equal(cards.children[0].children.some(c=>c.tag==='img'),false);});
 test('Codex displays remaining, window and reset with an accessible meter',()=>{const f=fixture();const cards=f.render('codex');assert.match(text(cards),/5 hour window: 75 % remaining/);assert.match(text(cards),/Reset \/ renewal:/);const meter=cards.children[0].children.find(c=>c.tag==='progress');assert.equal(meter.value,75);assert.match(meter.attributes['aria-label'],/quota remaining/);});
 test('expired manual quota is unknown and still shows provenance',()=>{const f=fixture();const cards=f.render('hermes');assert.match(text(cards),/Unknown — refresh needed/);assert.match(text(cards),/Manual reading/);assert.doesNotMatch(text(cards),/10 credits remaining/);});
+test('continuity uses backend blockers and gates offline controls',async()=>{
+ const f=fixture();f.context.fetch=async()=>({ok:true,json:async()=>({engine:'offline_fixture',monitoring:'fixture_only',capabilities:{prepare_offline:true},sessions:[{id:'fixture',project:'Long project name <script>',agent:'hermes',readiness:'handoff_blocked',activity:'unknown',verification:'stale',checkpoint_fresh:false,dirty:true,objective:'unfinished',cwd:'/fixture',writer:'unknown',pending:['finish'],blocked_reasons:['Source identity uncertain'],verification_provenance:['caller-reported']}]})});
+ await vm.runInContext('refreshContinuity()',f.context);
+ const cards=f.ids.get('continuity-sessions');assert.match(text(cards),/Source identity uncertain/);assert.match(text(cards),/stale/);assert.match(text(cards),/caller-reported/);assert.match(text(cards),/Prepare offline handoff/);assert.doesNotMatch(text(cards),/handoff_complete/);
+ f.context.fetch=async()=>{throw new Error('disconnect')};await vm.runInContext('refreshContinuity()',f.context);assert.equal(cards.children.length,0);assert.match(f.ids.get('continuity-status').textContent,/disconnected.*unknown/);
+});
+test('refresh keeps an expanded card open and its control output',async()=>{
+ const f=fixture();let n=1;const session=()=>({id:'one',project:'P',agent:'claude',readiness:'handoff_blocked',activity:'idle',verification:'stale',checkpoint_fresh:false,dirty:false,objective:'o'+n,cwd:'/p',writer:'unknown',pending:[],blocked_reasons:['b'],verification_provenance:[]});
+ f.context.fetch=async()=>({ok:true,json:async()=>({engine:'e',monitoring:'m',capabilities:{prepare_offline:false},sessions:[session()]})});
+ await vm.runInContext('refreshContinuity()',f.context);
+ const cards=f.ids.get('continuity-sessions');cards.children[0].open=true;
+ n=2;await vm.runInContext('refreshContinuity()',f.context);
+ assert.equal(cards.children[0].open,true);assert.match(text(cards),/o2/);
+});

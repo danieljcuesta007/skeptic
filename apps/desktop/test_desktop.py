@@ -47,6 +47,13 @@ class DesktopTests(unittest.TestCase):
    files=[str(p.relative_to(target)) for p in target.rglob('*') if p.is_file()]
    self.assertFalse(any('usage.json' in p or 'projects.json' in p or '.claude' in p for p in files))
    args=compile.call_args.args[0];self.assertEqual(args[0],'swiftc');self.assertNotIn('shell',compile.call_args.kwargs)
+ def test_acceptance_state_explicit_private_fixture(self):
+  with tempfile.TemporaryDirectory(dir='/private/tmp') as tmp:
+   root=Path(tmp);root.chmod(0o700)
+   with patch.dict(os.environ,{'SKEPTIC_DESKTOP_STATE':str(root)}):self.assertEqual(backend.selected_state(),root.resolve())
+   root.chmod(0o755)
+   with patch.dict(os.environ,{'SKEPTIC_DESKTOP_STATE':str(root)}),self.assertRaises(ValueError):backend.selected_state()
+   with patch.dict(os.environ,{'SKEPTIC_DESKTOP_STATE':str(Path.home())}),self.assertRaises(ValueError):backend.selected_state()
  def test_navigation_and_termination(self):
   source=(Path(__file__).parent/'Skeptic.swift').read_text()
   self.assertIn('url.host==allowed.host',source);self.assertIn('url.port==allowed.port',source);self.assertIn('decisionHandler(.cancel)',source);self.assertIn('fileHandleForWriting.close()',source);self.assertIn('applicationShouldTerminateAfterLastWindowClosed',source)

@@ -204,6 +204,43 @@ class SwitchTests(unittest.TestCase):
         self.repo.rename(self.root / 'oldcode'); self.repo.mkdir()
         with patch('sys.stdin.isatty', return_value=False), self.assertRaises(s.host.Denied): self.state.grant(self.repo, 'repository')
 
+    def test_reboot_renumbered_device_keeps_approval(self):
+        # macOS renumbers st_dev on remount: same folder, same inode, new device.
+        info = os.stat(self.repo)
+        self.state.settings['grants'][str(self.repo)] = {'kind': 'repository', 'identity': [info.st_dev + 2, info.st_ino]}
+        with patch('sys.stdin.isatty', return_value=False):
+            _, fd = self.state.grant(self.repo, 'repository'); os.close(fd)
+        self.assertEqual(self.state.read('settings.json', {})['grants'][str(self.repo)]['identity'], s.host.durable_identity(info))
+
+    def test_legacy_inode_match_only_at_upgrade(self):
+        info = os.stat(self.repo)
+        legacy = [info.st_dev + 2, info.st_ino]
+        self.assertFalse(s.host.identity_matches(legacy, info))
+        self.assertTrue(s.host.identity_matches(legacy, info, legacy=True))
+        self.assertTrue(s.host.identity_matches(s.host.durable_identity(info), info))
+
+    def test_durable_grant_replaced_root_requires_approval(self):
+        with patch('sys.stdin.isatty', return_value=True), contextlib.redirect_stdout(io.StringIO()):
+            self.state.settings['grants'] = {}
+            _, fd = self.state.grant(self.repo, 'repository', ask=lambda prompt: 'approve'); os.close(fd)
+        self.repo.rename(self.root / 'oldcode'); self.repo.mkdir()
+        with patch('sys.stdin.isatty', return_value=False), self.assertRaises(s.host.Denied): self.state.grant(self.repo, 'repository')
+
+    def test_ready_prints_verdicts_and_go_runs_best_command(self):
+        ready = {'agent': 'Claude Code', 'tty': 'ttys001', 'project': 'atlas', 'headline': 'Codex can pick up atlas', 'verdict': 'ready',
+                 'continue_command': ['skeptic', 'session', 'continue', '--id', 'x', '--with', 'codex'], 'continue_cwd': str(self.repo)}
+        self.addCleanup(os.chdir, os.getcwd())
+        wait = {'agent': 'Claude Code', 'tty': 'ttys002', 'project': 'beta', 'headline': 'Claude is mid-turn', 'verdict': 'wait', 'next_step': 'Wait', 'continue_command': None}
+        args = type('A', (), {'json': False, 'go': True})()
+        ran = []
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(s.ready_cli(args, rows=([ready, wait], ready), run=lambda argv: ran.append(argv) or 0), 0)
+        self.assertIn('Ready', out.getvalue()); self.assertIn('Codex can pick up atlas', out.getvalue())
+        self.assertEqual(ran, [['session', 'continue', '--id', 'x', '--with', 'codex']])
+        self.assertEqual(os.path.realpath(os.getcwd()), os.path.realpath(self.repo))
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(s.ready_cli(args, rows=([wait], wait), run=lambda argv: self.fail('ran')), 2)
+
     def test_state_symlink_refused(self):
         (self.root / 'state/settings.json').unlink()
         (self.root / 'state/settings.json').symlink_to(self.status)

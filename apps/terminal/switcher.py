@@ -1,5 +1,6 @@
 """Terminal switching engine. No HTTP dependency, document execution, or project writes."""
 import argparse
+import shlex
 import datetime
 import hashlib
 import json
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import termios
 import tty
+import unicodedata
 import urllib.request
 
 LOCAL = Path(__file__).resolve().parents[1] / 'local'
@@ -28,32 +30,90 @@ def clean(value):
     return ''.join(c if c >= ' ' and c != '\x7f' else ' ' for c in str(value))
 
 
-def choose(title, options, stream=None, output=None):
+def picker_line(value, columns):
+    """Keep a row within the screen, including wide and combining characters."""
+    result, width = [], 0
+    for char in clean(value):
+        cells = 0 if unicodedata.combining(char) else (2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1)
+        if width + cells > max(0, columns - 1): break
+        result.append(char); width += cells
+    return ''.join(result)
+
+
+def picker_wrap(value, columns):
+    """Wrap display text by terminal cells, preferring word boundaries."""
+    remaining, lines = clean(value), []
+    while remaining:
+        line = picker_line(remaining, columns)
+        if not line: break  # Even one character may not fit in a tiny terminal.
+        if len(line) < len(remaining) and ' ' in line and line.rfind(' ') > 0:
+            line = line[:line.rfind(' ')]
+        lines.append(line)
+        remaining = remaining[len(line):].lstrip()
+    return lines
+
+
+def choose(title, options, stream=None, output=None, on_enter=None):
     stream, output = stream or sys.stdin, output or sys.stdout
     if not options: raise host.Denied('No choices available')
     if not stream.isatty() or not output.isatty():
         raise host.Denied('Picker needs a terminal. Use continue --with codex or claude.')
     fd, old, index = stream.fileno(), termios.tcgetattr(stream.fileno()), 0
+    top, rendered_size, redraw = 0, None, True
     try:
         tty.setcbreak(fd)
-        output.write('\033[?25l')
+        output.write('\033[?1049h\033[?25l')
         while True:
-            output.write('\r\033[J' + clean(title) + '\nUse ↑ ↓ to select, Enter to continue. Esc/q cancels.\n')
-            for n, label in enumerate(options): output.write(('› ' if n == index else '  ') + clean(label) + '\n')
-            output.flush()
+            try: columns, rows = os.get_terminal_size(output.fileno())
+            except OSError: columns, rows = 80, 24
+            columns, rows = columns or 80, rows or 24
+            if redraw or rendered_size != (columns, rows):
+                help_line = ('Use ↑ ↓ to select, Enter to continue. Esc/q cancels.' if columns >= 51
+                             else '↑/↓ select · Enter · Esc/q')
+                header = [title, help_line, f'{index + 1}/{len(options)}'][:max(0, rows - 2)]
+                selected = options[index]
+                selected_title = getattr(selected, 'picker_title', str(selected))
+                details = getattr(selected, 'picker_details', ())
+                detail_lines = []
+                if details or picker_line(selected_title, columns - 2) != clean(selected_title):
+                    detail_lines = picker_wrap('Selected: ' + selected_title, columns)
+                    for name, value in details:
+                        detail_lines.extend(picker_wrap(name + ': ' + str(value), columns))
+                available = max(1, rows - len(header) - 1)
+                # Share space with details, but use spare space when the list is short.
+                list_minimum = min(len(options), max(1, available // 2))
+                detail_lines = detail_lines[:available - list_minimum]
+                capacity = available - len(detail_lines)
+                top = min(top, max(0, len(options) - capacity))
+                if index < top: top = index
+                elif index >= top + capacity: top = index - capacity + 1
+                lines = header + [('› ' if n == index else '  ') +
+                                  getattr(options[n], 'picker_title', str(options[n]))
+                                  for n in range(top, min(len(options), top + capacity))] + detail_lines
+                # Always anchor at the top after terminal reflow; never emit enough
+                # rows/columns to scroll or wrap. No padding before selected details.
+                output.write('\033[H\033[J' + '\r\n'.join(picker_line(line, columns) for line in lines))
+                output.flush()
+                rendered_size, redraw = (columns, rows), False
+            # A bounded wait notices SIGWINCH-driven size changes without consuming a
+            # key or replacing the caller's process-wide signal handlers.
+            if not select.select([fd], [], [], .1)[0]: continue
             key = os.read(fd, 1)
             if key == b'\x1b':
                 while len(key) < 3 and select.select([fd], [], [], .12)[0]:
                     key += os.read(fd, 3 - len(key))
                 if key == b'\x1b': raise KeyboardInterrupt
-            if key in (b'\x1b[A', b'k'): index = (index - 1) % len(options)
-            elif key in (b'\x1b[B', b'j'): index = (index + 1) % len(options)
-            elif key in (b'\r', b'\n'): return index
+            if key in (b'\x1b[A', b'\x1bOA', b'k'): index = (index - 1) % len(options)
+            elif key in (b'\x1b[B', b'\x1bOB', b'j'): index = (index + 1) % len(options)
+            elif key in (b'\r', b'\n'):
+                # Multi-selection updates labels in this same terminal loop;
+                # cursor, viewport and terminal mode survive each toggle.
+                if on_enter is None or on_enter(index): return index
             elif key in (b'q', b'\x03', b'\x04', b''): raise KeyboardInterrupt
-            output.write(f'\033[{len(options)+2}A')
+            redraw = True
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
-        output.write('\033[?25h\n'); output.flush()
+        output.write('\033[?25h\033[?1049l'); output.flush()
 
 
 def providers(which=shutil.which, fetch=None):
@@ -129,9 +189,14 @@ class State:
 
     def grant(self, path, kind, ask=input):
         path, fd = host.approve_root(str(path), vault=kind == 'vault')
-        signature = list(host.Engine.sig(os.fstat(fd))[:2])
+        info = os.fstat(fd)
+        signature = host.durable_identity(info)
         old = self.settings['grants'].get(path)
-        if old != {'kind': kind, 'identity': signature}:
+        if old and old.get('kind') == kind and host.identity_matches(old.get('identity'), info, legacy=True):
+            if old['identity'] != signature:  # pre-durable grant: upgrade in place, no prompt
+                self.settings['grants'][path] = {'kind': kind, 'identity': signature}
+                self.save()
+        else:
             if getattr(self, 'no_new_grants', False):
                 os.close(fd); raise host.Denied('Approved scope changed/revoked; refresh checkpoint manually')
             if not sys.stdin.isatty():
@@ -427,7 +492,10 @@ def session_destination(state, snapshot, explicit=None, confirm=False):
     mapped = state.settings['mappings'].get(mapping_key)
     if mapped and history.safe_path(mapped) and not confirm: return mapped
     cwd = history.safe_path(snapshot.get('cwd'))
-    if cwd is None: raise host.Denied('Session working directory is unavailable; use --cwd with the approved destination')
+    if cwd is None:
+        if not confirm: raise host.Denied('Session working directory is unavailable; use --cwd with the approved destination')
+        cwd = history.safe_path(input('Recorded directory unavailable. Confirm actual project/worktree folder: ').strip())
+        if not cwd: raise host.Denied('Invalid/protected project folder')
     candidates = [cwd]
     if confirm:
         for value in (mapped, os.getcwd()):
@@ -457,7 +525,7 @@ def session_destination(state, snapshot, explicit=None, confirm=False):
 
 def session_cli(args, state):
     import sessions as history
-    access = history.Access(state)
+    access = history.Access(state, force_prompt=getattr(args, 'fresh_session_approval', False))
     if args.command == 'sessions' and args.action == 'revoke':
         access.revoke(); print('Session discovery/extraction approvals revoked. Original sessions untouched.'); return 0
     if args.command == 'sessions' and args.action == 'permissions':
@@ -473,6 +541,14 @@ def session_cli(args, state):
     adapter = history.ClaudeAdapter(root) if args.source == 'claude' else history.CodexAdapter(root)
     project = history.safe_path(args.project)
     if not project: raise host.Denied('Invalid/protected session project scope')
+    if args.command == 'sessions' and action == 'review':
+        if args.source != 'claude': raise host.Denied('Multi-session review supports Claude only')
+        import session_review
+        return session_review.run(args, state, adapter, access, project)
+    if args.command == 'sessions' and action == 'open':
+        if args.source != 'claude': raise host.Denied('Open Terminal recovery supports Claude only')
+        import open_sessions
+        return open_sessions.run(args, state, adapter, access, project)
     if args.source == 'codex':
         if not args.session_file: raise host.Denied('Codex reverse adapter needs --session-file PATH (accessible legacy JSONL only); no private-history scan')
         session = adapter.selected_file(access, args.session_file)
@@ -508,23 +584,31 @@ def session_cli(args, state):
     if action in ('handoff', 'preview'):
         print('PROPOSED SESSION HANDOFF — selected original remains open; no cloud launch.\n' + packet)
         return 0
+    return launch_recovery(args, state, adapter, access, snapshot, cwd, task, evidence, summary, packet)
+
+
+def launch_recovery(args, state, adapter, access, snapshot, cwd, task, evidence, summary, packet):
     if not sys.stdin.isatty() or not sys.stdout.isatty(): raise host.Denied('Launch requires a second interactive Terminal; original session stays open')
     model = requested_model(select_provider(state, args.provider), getattr(args, 'model', None))
     print('Selected provider: ' + clean(model['label']) + '. Original session remains open. Host approvals still apply.', flush=True)
     state.settings = state.read('settings.json', {})
     # Re-read granted knowledge and recheck transcript consent/snapshot immediately before launch.
     summary, packet = assemble(state, cwd, args.vault, task, session=evidence, target=model['id'])
-    adapter.verify(access, snapshot)
+    if adapter.verify(access, snapshot)['appended_bytes']: raise host.Denied('Source appended; refresh the review before launch')
     state.settings['recent'] = [model['id']] + [p for p in state.settings['recent'] if p != model['id']][:9]
     print('REVIEW SELECTED SESSION HANDOFF — no provider has launched yet.', flush=True)
     review_summary(summary, evidence)
+    print('COMPLETE FILTERED RECOVERY PACKET\n' + packet, flush=True)
     print('Outgoing evidence SHA-256: ' + hashlib.sha256(packet.encode()).hexdigest())
+    print('A detached or quota-limited source may still have a tool process writing or automatically resume when availability returns. Check background tools AND queued/automatic continuation. Skeptic cannot prove unmanaged process quiescence. If any agent may write this project, cancel and choose an existing isolated worktree with --cwd, or prepare a handoff only.')
+    if input('After checking the original Claude window and other project writers, type project-clear to continue: ').strip() != 'project-clear':
+        raise host.Denied('Project writer check declined; no provider launched')
     while True:
         answer = input('Type send to approve this exact outgoing packet, evidence to inspect it, or anything else to cancel: ').strip()
         if answer == 'evidence': print(packet, flush=True); continue
         if answer != 'send': raise host.Denied('Handoff sending declined')
         break
-    adapter.verify(access, snapshot)
+    if adapter.verify(access, snapshot)['appended_bytes']: raise host.Denied('Source appended; refresh the review before launch')
     state.settings = state.read('settings.json', {})
     state.no_new_grants = True
     try: _, refreshed = assemble(state, cwd, args.vault, task, session=evidence, target=model['id'])
@@ -534,6 +618,7 @@ def session_cli(args, state):
     state.save(); state.event('launch_started', model['id'])
     # Conversation-only previews do not grant project reads, but launch still
     # requires an exact, non-symlink directory; never follow a saved alias.
+    if getattr(args, 'open_source_check', None): args.open_source_check()
     destination_fd = host.open_directory(str(cwd)); os.close(destination_fd)
     code = tracked_launch(state, model, cwd, packet, args.vault, task)
     if code: print(f'Provider exited {code}; original session untouched by Skeptic.', file=sys.stderr)
@@ -541,6 +626,21 @@ def session_cli(args, state):
 
 
 def tracked_launch(state, model, cwd, packet, vault, task):
+    # Serialize CLI writers sharing the consent state; unmanaged writers still
+    # require the explicit project-clear attestation, never inferred from quota.
+    import fcntl
+    fd = os.open('continuation-writer.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=state.fd)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
+            raise host.Denied('Unsafe continuation writer reservation')
+        try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError: raise host.Denied('Another Skeptic CLI writer is active; no provider launched')
+        return _tracked_launch(state, model, cwd, packet, vault, task)
+    finally: os.close(fd)
+
+
+def _tracked_launch(state, model, cwd, packet, vault, task):
     import continuity
     index = continuity.Index(state)
     start = dict(state.observation, session=None, incoming_session=state.observation.get('session'))
@@ -582,14 +682,58 @@ def launch(provider, cwd, packet, run=subprocess.run):
     return run(argv, cwd=cwd, check=False).returncode
 
 
+def live_rows():
+    """Open agents with a verdict each. Reads native session metadata only
+    (the same scope as the Vitals tile); no approvals, history or Git."""
+    import importlib.util
+    def load(name):
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(name + '.py'))
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); return module
+    inventory, sessions = load('live_inventory'), load('live_sessions')
+    rows = sessions.collect(inventory.collect())
+    return rows, sessions.summary(rows)
+
+
+MARKS = {'ready': 'Ready', 'wait': 'Wait ', 'needs_project': 'Needs', 'unknown': '  ?  '}
+
+
+def ready_cli(args, rows=None, run=None):
+    """skeptic ready: if this agent stopped now, could another pick up?"""
+    rows, best = rows if rows is not None else live_rows()
+    if args.json:
+        print(json.dumps({'summary': best, 'rows': rows}, indent=2)); return 0
+    if not rows:
+        print('No open Claude, Codex or Hermes sessions.'); return 0
+    print('SKEPTIC — could another engine pick up?')
+    for row in rows:
+        print(f"{MARKS.get(row.get('verdict'), '  ?  ')}  {row['agent']} ({row['tty']}) · {clean(row['project'])} — {clean(row['headline'])}")
+        if row.get('continue_command'): print('        ' + ' '.join(shlex.quote(a) for a in row['continue_command']))
+        elif row.get('next_step'): print('        ' + clean(row['next_step']))
+    if args.go:
+        if not best or not best.get('continue_command'):
+            print('Nothing is ready to continue yet.', file=sys.stderr); return 2
+        # Repository continuations read the current directory: run it in the
+        # session's project, not wherever this terminal happens to be.
+        if best.get('continue_cwd'): os.chdir(best['continue_cwd'])
+        return (run or main)(best['continue_command'][1:])
+    return 0
+
+
 def main(argv=None):
     selected_argv = sys.argv[1:] if argv is None else argv
+    if not selected_argv:
+        selected_argv = ['sessions', 'open', '--continue', '--with', 'codex', '--project', str(Path.home())]
     if selected_argv[:1] == ['managed']:
         from managed_cli import main as managed_main
         return managed_main(selected_argv[1:])
+    if selected_argv[:1] == ['switch'] and '--with' not in selected_argv and (('--select' in selected_argv or '--all' in selected_argv) or os.environ.get('SKEPTIC_SESSION_ID') or any(p in selected_argv for p in ('claude','codex','skeptic-fake-v1'))):
+        from managed_switch_cli import main as switch_main
+        try: return switch_main(selected_argv[1:])
+        except (host.Denied, __import__('managed_engine').Denied, OSError, ValueError) as error:
+            print('Managed switch refused: '+str(error),file=sys.stderr);return 2
     parser = argparse.ArgumentParser(prog='skeptic')
-    parser.add_argument('command', nargs='?', default='switch', choices=['switch', 'continue', 'status', 'doctor', 'models', 'handoff', 'permissions', 'analytics', 'sessions', 'session', 'catchup', 'checkpoint', 'transitions'])
-    parser.add_argument('action', nargs='?')
+    parser.add_argument('command', nargs='?', default='switch', choices=['switch', 'continue', 'status', 'doctor', 'models', 'handoff', 'permissions', 'analytics', 'sessions', 'session', 'catchup', 'checkpoint', 'transitions', 'ready'])
+    parser.add_argument('action', nargs='?', help='sessions: open|list|pick|review|permissions|revoke; session: handoff|preview|continue|verify')
     parser.add_argument('path', nargs='?')
     parser.add_argument('--with', dest='provider')
     parser.add_argument('--model', help='Explicit provider-native model name; catalog/auth/quota not inferred')
@@ -606,7 +750,12 @@ def main(argv=None):
     parser.add_argument('--conversation-only', action='store_true', help='Approved transcript recovery without project/Git/vault reads')
     parser.add_argument('--session-root', help='Explicit custom session storage directory')
     parser.add_argument('--session-file', help='Explicit Codex legacy JSONL transcript/export; no automatic Codex scan')
-    args = parser.parse_args(argv)
+    parser.add_argument('--continue', dest='continue_open', action='store_true', help='Open-session task confirmation then approved Codex launch; default for bare skeptic')
+    parser.add_argument('--json', action='store_true', help='ready: machine-readable rows')
+    parser.add_argument('--go', action='store_true', help='ready: run the best ready continuation now')
+    parser.add_argument('--fresh-session-approval', action='store_true', help='Ask again for metadata and selected-transcript consent even when a matching persistent grant exists')
+    args = parser.parse_args(selected_argv)
+    if args.command == 'ready': return ready_cli(args)
     state = None
     try:
         state = State(args.state_dir)
@@ -645,9 +794,12 @@ def main(argv=None):
                 for path, grant in state.settings['grants'].items():
                     try:
                         _, fd = host.approve_root(path, vault=grant['kind'] == 'vault')
-                        try: valid = list(host.Engine.sig(os.fstat(fd))[:2]) == grant['identity']
+                        try:
+                            info = os.fstat(fd)
+                            valid = host.identity_matches(grant['identity'], info)
+                            legacy = not valid and host.identity_matches(grant['identity'], info, legacy=True)
                         finally: os.close(fd)
-                        print(clean(path) + ': ' + ('valid' if valid else 'changed; fresh approval needed'))
+                        print(clean(path) + ': ' + ('valid' if valid else 'valid; record upgrades on next skeptic run' if legacy else 'changed; fresh approval needed'))
                     except (OSError, host.Denied): print(clean(path) + ': inaccessible')
             return 0
         model = None

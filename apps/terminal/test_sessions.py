@@ -95,6 +95,20 @@ class SessionTests(unittest.TestCase):
         self.access.revoke()
         with self.assertRaises(s.host.Denied): self.adapter.verify(self.access, snapshot)
 
+    def test_fresh_session_approval_reprompts_existing_metadata_and_transcript_grants(self):
+        self.snapshot()
+        prompts = []
+        fresh = h.Access(self.state, ask=lambda prompt: prompts.append(prompt) or 'approve', force_prompt=True)
+        def read_selected():
+            session = self.adapter.discover(fresh, self.origin)[0]
+            return self.adapter.snapshot(fresh, session)
+        approval_text = io.StringIO()
+        with patch('sys.stdin.isatty', return_value=True), contextlib.redirect_stdout(approval_text):
+            snapshot = read_selected()
+        self.assertEqual(snapshot['id'], ID)
+        self.assertEqual(len(prompts), 2)
+        self.assertEqual(approval_text.getvalue().count('Persistent permission'), 2)
+
     def test_declined_scope(self):
         self.access.ask = lambda prompt: 'no'
         with self.assertRaises(s.host.Denied): self.discover()
@@ -300,14 +314,70 @@ class SessionTests(unittest.TestCase):
         self.snapshot(); args, model = self.review_args()
         class Terminal(io.StringIO):
             def isatty(self): return True
-        with contextlib.redirect_stdout(Terminal()), patch('sys.stdin.isatty', return_value=True), patch.object(s, 'providers', return_value=[model]), patch('builtins.input', return_value='decline'), self.assertRaisesRegex(s.host.Denied, 'sending declined'):
+        with contextlib.redirect_stdout(Terminal()), patch('sys.stdin.isatty', return_value=True), patch.object(s, 'providers', return_value=[model]), patch('builtins.input', side_effect=['project-clear', 'decline']), self.assertRaisesRegex(s.host.Denied, 'sending declined'):
             s.session_cli(args, self.state)
+
+    def test_project_writer_confirmation_required_before_launch(self):
+        self.snapshot(); args, model = self.review_args()
+        class Terminal(io.StringIO):
+            def isatty(self): return True
+        with contextlib.redirect_stdout(Terminal()), patch('sys.stdin.isatty', return_value=True), patch.object(s, 'providers', return_value=[model]), patch('builtins.input', return_value='no'), patch.object(s, 'tracked_launch', side_effect=AssertionError('Must not launch')):
+            with self.assertRaisesRegex(s.host.Denied, 'Project writer check declined'):
+                s.session_cli(args, self.state)
+
+    def test_complete_filtered_packet_displayed_before_send(self):
+        self.snapshot(); args, model = self.review_args()
+        class Terminal(io.StringIO):
+            def isatty(self): return True
+        output = Terminal(); reviewed = []
+        def approve(prompt):
+            if prompt.startswith('After checking'): return 'project-clear'
+            self.assertTrue(prompt.startswith('Type send'))
+            text = output.getvalue()
+            self.assertIn('COMPLETE FILTERED RECOVERY PACKET\n', text)
+            packet = text.split('COMPLETE FILTERED RECOVERY PACKET\n', 1)[1].split('\nOutgoing evidence SHA-256:', 1)[0]
+            self.assertIn('CANONICAL_NEXT', packet)
+            self.assertIn('Continue the reply, without sending.', packet)
+            self.assertIn('Context bounded to', packet)
+            self.assertNotIn('HIDDEN_REASONING', packet)
+            self.assertNotIn('RAW_TOOL_SECRET', packet)
+            self.assertNotIn('RAW_EDIT_BODY', packet)
+            reviewed.append(packet)
+            return 'send'
+        def capture(state, provider, cwd, packet, vault, task):
+            self.assertEqual(reviewed, [packet])
+            self.assertEqual(cwd, str(self.repo))
+            return 0
+        with contextlib.redirect_stdout(output), patch('sys.stdin.isatty', return_value=True), patch.object(s, 'providers', return_value=[model]), patch('builtins.input', side_effect=approve), patch.object(s, 'tracked_launch', side_effect=capture) as launched:
+            self.assertEqual(s.session_cli(args, self.state), 0)
+        launched.assert_called_once()
+
+    def test_declined_send_displays_packet_without_launch_or_persistence(self):
+        self.snapshot(); args, model = self.review_args()
+        class Terminal(io.StringIO):
+            def isatty(self): return True
+        output = Terminal()
+        def decline(prompt):
+            if prompt.startswith('After checking'): return 'project-clear'
+            self.assertIn('COMPLETE FILTERED RECOVERY PACKET\n', output.getvalue())
+            self.assertIn('Context bounded to', output.getvalue())
+            return 'decline'
+        before = self.file.read_bytes()
+        with contextlib.redirect_stdout(output), patch('sys.stdin.isatty', return_value=True), patch.object(s, 'providers', return_value=[model]), patch('builtins.input', side_effect=decline), patch.object(s, 'tracked_launch') as launched:
+            with self.assertRaisesRegex(s.host.Denied, 'sending declined'):
+                s.session_cli(args, self.state)
+        launched.assert_not_called()
+        self.assertEqual(before, self.file.read_bytes())
+        for path in (self.root / 'state').iterdir():
+            if path.is_file(): self.assertNotIn(b'Continue the reply, without sending.', path.read_bytes())
 
     def test_context_changed_during_review_requires_new_review(self):
         self.snapshot(); args, model = self.review_args()
         class Terminal(io.StringIO):
             def isatty(self): return True
         def approve(prompt):
+            if prompt.startswith('After checking'):
+                return 'project-clear'
             file = self.project / 'STATUS.md'; file.write_text(file.read_text() + '\nNEWER_CHECKPOINT\n')
             return 'send'
         with contextlib.redirect_stdout(Terminal()), patch('sys.stdin.isatty', return_value=True), patch.object(s, 'providers', return_value=[model]), patch('builtins.input', side_effect=approve), self.assertRaisesRegex(s.host.Denied, 'changed during review'):
@@ -326,7 +396,7 @@ class SessionTests(unittest.TestCase):
         master, slave = pty.openpty()
         command = [sys.executable, '-B', str(Path(s.__file__)), 'session', 'continue', '--title', 'Email contact with Boris', '--project', str(self.repo), '--session-root', str(self.storage), '--vault', str(self.vault), '--state-dir', str(self.root / 'state')]
         proc = subprocess.Popen(command, env=env, cwd=self.root, stdin=slave, stdout=slave, stderr=slave); os.close(slave)
-        output, sent, approved = b'', False, False
+        output, sent, writer_clear, approved = b'', False, False, False
         try:
             deadline = time.monotonic() + 12
             while proc.poll() is None and time.monotonic() < deadline:
@@ -337,6 +407,7 @@ class SessionTests(unittest.TestCase):
                         output += chunk
                     except OSError: break
                 if not sent and b'Esc/q cancels' in output: os.write(master, b'\x1b[B\n'); sent = True
+                if not writer_clear and b'type project-clear to continue' in output: os.write(master, b'project-clear\n'); writer_clear = True
                 if not approved and b'Type send to approve' in output: os.write(master, b'send\n'); approved = True
             proc.wait(timeout=2)
             self.assertEqual(proc.returncode, 0, output.decode(errors='replace'))

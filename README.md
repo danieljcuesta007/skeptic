@@ -96,3 +96,24 @@ and [license decision](LICENSE-DECISION.md).
 The owner's private canonical project checkpoint remains outside this source
 repository. Documentation here is product/development material, not another personal
 memory system. Progress updates are manual; no hooks or sync services are installed.
+
+
+## Managed multi-session work — Step 44
+
+Temporary-project managed switching now has current/selected/all scopes, explicit provider
+contracts and a durable recovery journal. Engine runtime/native acceptance is incomplete;
+active sources and production migration remain unsupported. The implementation is not
+production ready. [Commands, evidence and limitations](apps/terminal/MANAGED.md).
+
+## Step 44 continuity development
+
+The isolated continuity slice adds checkpoint proposals, scoped verification receipts,
+fixture-only reviewed writes, a portable skill, offline agent recovery contracts and
+read-only engine observations. The existing desktop includes expandable continuity
+cards and a compact view; it reports unconnected/unknown without an explicit fixture
+engine. No new live hooks, login services or provider integrations are activated.
+
+[Implementation, commands, security limits and live-readiness](docs/development/STEP44-CONTINUITY-IMPLEMENTATION.md).
+[Portable continuity contract](skills/skeptic/references/continuity-contract.md).
+Run the socket-independent validator as documented; full managed runtime acceptance
+requires Unix sockets. Offline adapter tests do not establish real provider acceptance.
