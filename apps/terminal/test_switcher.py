@@ -235,7 +235,7 @@ class SwitchTests(unittest.TestCase):
         ran = []
         with contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(s.ready_cli(args, rows=([ready, wait], ready), run=lambda argv: ran.append(argv) or 0), 0)
-        self.assertIn('Ready', out.getvalue()); self.assertIn('Codex can pick up atlas', out.getvalue())
+        self.assertIn('Ready', out.getvalue()); self.assertIn('Codex can pick up atlas', out.getvalue()); self.assertIn('1. ', out.getvalue())
         self.assertEqual(ran, [['session', 'continue', '--id', 'x', '--with', 'codex']])
         self.assertEqual(os.path.realpath(os.getcwd()), os.path.realpath(self.repo))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -259,6 +259,26 @@ class SwitchTests(unittest.TestCase):
         with patch('os.fdopen', side_effect=OSError('disk full')), self.assertRaises(OSError):
             s.launch(hermes, str(self.repo), 'PACKET', run=lambda *a, **k: self.fail('ran'), scratch=self.root / 'handoffs2')
         self.assertEqual(list((self.root / 'handoffs2').iterdir()), [])
+
+    def test_switch_one_open_session_by_tab_then_engine(self):
+        keep = {'tty': 'ttys001', 'label': 'Keep for later', 'project': 'beta', 'agent': 'Claude Code', 'activity': 'idle', 'verdict': 'ready',
+                'continue_command': ['skeptic', 'session', 'continue', '--id', 'k', '--with', 'codex'], 'destinations': ['codex', 'hermes']}
+        move = dict(keep, tty='ttys002', label='Move this one', continue_command=['skeptic', 'session', 'continue', '--id', 'm', '--with', 'codex'], continue_cwd=str(self.repo))
+        busy = dict(keep, tty='ttys003', label='Busy one', verdict='wait', activity='working', continue_command=None, blocked_reasons=['Source is working'])
+        asked, ran = [], []
+        picks = iter([1, 1])  # second session, second engine
+        self.addCleanup(os.chdir, os.getcwd())
+        def choose_fn(title, options): asked.append((title, options)); return next(picks)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(s.switch_open_session(rows=[busy, move, keep], choose_fn=choose_fn, run=lambda a: ran.append(a) or 0), 0)
+        self.assertEqual(asked[0][1][1], '2. Move this one — Claude Code, can switch')  # tab order: ttys001 first
+        self.assertEqual(ran, [['session', 'continue', '--id', 'm', '--with', 'hermes']])
+        picks = iter([2])
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(s.switch_open_session(rows=[busy, move, keep], choose_fn=lambda t, o: next(picks), run=lambda a: self.fail('ran')), 2)
+        odd = {'tty': 'ttys009', 'verdict': 'ready', 'continue_command': ['skeptic', 'continue']}  # no label, activity or --with
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(s.switch_open_session(rows=[odd], choose_fn=lambda t, o: 0, run=lambda a: self.fail('ran')), 2)
 
     def test_state_symlink_refused(self):
         (self.root / 'state/settings.json').unlink()
