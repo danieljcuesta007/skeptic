@@ -15,6 +15,7 @@ import re
 import sqlite3
 import stat
 import subprocess
+import sys
 import time
 
 LIMIT = 256 * 1024
@@ -372,8 +373,41 @@ def summary(rows):
     return best[0] if best else None
 
 
-def collect(inventory, home=None, clock=time.time, births=birth):
+TITLES_SCRIPT = '''tell application "Terminal"
+set out to ""
+repeat with w in windows
+repeat with t in tabs of w
+set out to out & (tty of t) & (ASCII character 31) & (custom title of t) & linefeed
+end repeat
+end repeat
+return out
+end tell'''
+
+
+def tab_label(title):
+    """Claude names each tab after the conversation ("◐ Widget spacing fixes");
+    drop the status glyph and Claude's placeholder."""
+    text = clean(re.sub(r'^[^0-9A-Za-z]+', '', title or ''), 80).strip()
+    return '' if text in ('Claude Code', 'claude', 'Codex', 'codex', 'Hermes', 'hermes') else text
+
+
+def terminal_titles(run=subprocess.run):
+    """{tty: tab title} from Terminal.app, the names Daniel actually sees. Best
+    effort: off macOS, without Automation permission, or on timeout, empty."""
+    if sys.platform != 'darwin' or os.environ.get('SKEPTIC_TAB_TITLES') == '0': return {}
+    try: out = run(['/usr/bin/osascript', '-e', TITLES_SCRIPT], capture_output=True, text=True, timeout=2).stdout
+    except (OSError, subprocess.SubprocessError): return {}
+    titles = {}
+    for line in (out or '').splitlines()[:64]:
+        tty, sep, title = line.partition('\x1f')
+        tty = tty.strip().rsplit('/', 1)[-1]
+        if sep and re.fullmatch(r'ttys[0-9]{3,4}', tty): titles[tty] = tab_label(title)
+    return titles
+
+
+def collect(inventory, home=None, clock=time.time, births=birth, titles=None):
     home = Path(home) if home else Path.home()
+    tabs = terminal_titles() if titles is None else titles
     try: links = read_json(home / '.skeptic-widget/session-links.json')
     except (OSError, ValueError, TypeError): links = {}
     rows = []
@@ -387,8 +421,13 @@ def collect(inventory, home=None, clock=time.time, births=birth):
             elif agent['agent'] == 'Claude Code': row = claude(agent, home, started)
         except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, subprocess.SubprocessError): pass
         if started is not None: row['process_birth'] = started
+        row['tab_title'] = tabs.get(agent['tty'], '')
         rows.append(row)
-    return assess(rows)
+    rows = assess(rows)
+    for row in rows:  # one name per session: its tab title, else its project
+        title = row.get('title') or ''
+        row['label'] = row.get('tab_title') or (title if title not in ('Conversation not linked', 'Untitled Claude conversation') and not title.startswith(os.path.basename(str(home))) else '') or row.get('project') or 'Unknown session'
+    return rows
 
 
 if __name__ == '__main__':

@@ -34,7 +34,7 @@ class ClaudeFixture(unittest.TestCase):
 
     def collect(self, agents=None):
         agents = agents or [{'pid': 42, 'tty': 'ttys001', 'agent': 'Claude Code'}]
-        return live.collect({'agents': agents}, self.home, births=lambda pid: self.started)
+        return live.collect({'agents': agents}, self.home, births=lambda pid: self.started, titles=getattr(self, 'titles', {}))
 
 
 class VerdictTests(ClaudeFixture):
@@ -119,6 +119,23 @@ class VerdictTests(ClaudeFixture):
     def test_ready_rows_offer_every_other_engine(self):
         self.assertEqual(self.collect()[0]['destinations'], ['codex', 'hermes'])
 
+    def test_session_named_by_its_terminal_tab(self):
+        self.titles = {'ttys001': 'Atlas importer'}
+        self.assertEqual(self.collect()[0]['label'], 'Atlas importer')
+        self.titles = {}
+        self.assertEqual(self.collect()[0]['label'], 'atlas-work')  # Claude's own session name
+
+    def test_tab_titles_parsed_from_terminal(self):
+        out = '/dev/ttys003\x1f\u25d0 Widget spacing fixes\n/dev/ttys005\x1f\u2733 Claude Code\nbad line\n/dev/../x\x1fnope\n'
+        run = lambda *a, **k: type('R', (), {'stdout': out})()
+        with patch.object(live.sys, 'platform', 'darwin'), patch.dict(os.environ, {'SKEPTIC_TAB_TITLES': '1'}):
+            self.assertEqual(live.terminal_titles(run=run), {'ttys003': 'Widget spacing fixes', 'ttys005': ''})
+        def boom(*a, **k): raise live.subprocess.TimeoutExpired('osascript', 2)
+        with patch.object(live.sys, 'platform', 'darwin'), patch.dict(os.environ, {'SKEPTIC_TAB_TITLES': '1'}):
+            self.assertEqual(live.terminal_titles(run=boom), {})
+        with patch.dict(os.environ, {'SKEPTIC_TAB_TITLES': '0'}):
+            self.assertEqual(live.terminal_titles(run=run), {})
+
     def test_summary_prefers_ready(self):
         rows = [{'verdict': 'wait', 'source': 'claude'}, {'verdict': 'ready', 'source': 'codex'}]
         self.assertEqual(live.summary(rows)['verdict'], 'ready'); self.assertIsNone(live.summary([]))
@@ -144,7 +161,7 @@ class HermesTests(unittest.TestCase):
         conn.commit(); conn.close(); (self.home / '.hermes/state.db').chmod(0o600)
 
     def test_idle_hermes_task_and_no_reasoning(self):
-        row = live.collect({'agents': [{'pid': 42, 'tty': 'ttys009', 'agent': 'Hermes'}]}, self.home, clock=lambda: 1100., births=lambda pid: 1000.)[0]
+        row = live.collect({'agents': [{'pid': 42, 'tty': 'ttys009', 'agent': 'Hermes'}]}, self.home, clock=lambda: 1100., births=lambda pid: 1000., titles={})[0]
         self.assertEqual(row['activity'], 'idle'); self.assertEqual(row['task'], 'Fix spacing'); self.assertNotIn('HIDDEN', json.dumps(row))
 
 
