@@ -110,6 +110,7 @@ def hermes(agent, home, started, now):
         automation = hermes_automation(conn,sid)
         desc = clean(meta['last_activity_description'])
         stamp = meta['last_activity_at']; fresh = isinstance(stamp, (int, float)) and 0 <= now - stamp <= 120
+        row['last_active'] = max([t for t in (stamp, last['timestamp'] if last else None) if isinstance(t, (int, float))], default=None)
         activity = 'working' if desc and fresh else 'idle' if not desc and last and last['role'] == 'assistant' and not last['tool_calls'] else 'unknown'
         evidence = 'Hermes durable activity heartbeat' if activity == 'working' else 'Hermes cleared turn activity and last assistant reply' if activity == 'idle' else 'Missing, stale, or unfinished Hermes turn evidence'
         row.update(automation)
@@ -199,6 +200,8 @@ def codex(agent, home, started, links):
     view = jsonl_view(path, meta['id'])
     try: view.update(codex_turn(home,meta['id']))
     except (OSError,ValueError,sqlite3.Error): pass
+    updated = meta.get('updated_at')
+    row['last_active'] = (updated / 1000 if updated > 1e11 else updated) if isinstance(updated, (int, float)) else None
     row.update(view); row.update(id='codex:'+meta['id']+':'+str(agent['pid']),session_id=meta['id'],title=clean(meta['title']),cwd=meta['cwd'] or '',
                                 model=clean(meta['model']) or 'unknown',association='owner-confirmed (not automatically verified)',source='codex',source_path=str(path))
     # A manual link cannot prove this process stayed in the same conversation.
@@ -283,6 +286,8 @@ def claude(agent, home, started):
     stalled = activity == 'working' and written is not None and time.time() - written > STALL_SECONDS
     if activity == 'working' and (stalled or limit):
         row['frozen'] = 'usage limit' if limit else f'no output for {int((time.time() - written) // 60)} min'
+    updated = meta.get('updatedAt')
+    row['last_active'] = max([t for t in (written, updated / 1000 if isinstance(updated, (int, float)) else None) if isinstance(t, (int, float))], default=None)
     row.update(id='claude:'+sid+':'+str(agent['pid']),session_id=sid,title=clean(meta.get('name')) or 'Untitled Claude conversation',
                task=task,cwd=cwd,work_cwd=work or cwd,activity=activity,
                activity_evidence='Claude native session status',association='native Claude session record (PID + start time)',source='claude')
