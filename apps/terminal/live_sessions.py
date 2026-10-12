@@ -425,7 +425,8 @@ def collect(inventory, home=None, clock=time.time, births=birth, titles=None):
         rows.append(row)
     rows = assess(rows)
     for row in rows:  # one name per session: its tab title, else its project
-        row['label'] = row['tab_title'] or (row['title'] if row['title'] not in ('Conversation not linked', 'Untitled Claude conversation') and not row['title'].startswith(os.path.basename(str(home))) else '') or row['project']
+        title = row.get('title') or ''
+        row['label'] = row.get('tab_title') or (title if title not in ('Conversation not linked', 'Untitled Claude conversation') and not title.startswith(os.path.basename(str(home))) else '') or row.get('project') or 'Unknown session'
     return rows
 
 

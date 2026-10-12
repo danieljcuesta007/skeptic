@@ -276,6 +276,9 @@ class SwitchTests(unittest.TestCase):
         picks = iter([2])
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(s.switch_open_session(rows=[busy, move, keep], choose_fn=lambda t, o: next(picks), run=lambda a: self.fail('ran')), 2)
+        odd = {'tty': 'ttys009', 'verdict': 'ready', 'continue_command': ['skeptic', 'continue']}  # no label, activity or --with
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(s.switch_open_session(rows=[odd], choose_fn=lambda t, o: 0, run=lambda a: self.fail('ran')), 2)
 
     def test_state_symlink_refused(self):
         (self.root / 'state/settings.json').unlink()

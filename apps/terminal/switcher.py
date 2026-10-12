@@ -728,14 +728,15 @@ def switch_open_session(rows=None, choose_fn=None, run=None):
     if not rows: print('No Claude, Codex or Hermes open right now.'); return 0
     labels = []
     for i, r in enumerate(rows, 1):
-        state = 'frozen, can switch' if r.get('frozen') else {'ready': 'can switch', 'wait': 'busy' if r['activity'] == 'working' else 'wait', 'needs_project': 'no project yet'}.get(r.get('verdict'), 'unclear')
-        labels.append(f"{i}. {r.get('label') or r['project']} — {r['agent']}, {state}")
+        state = 'frozen, can switch' if r.get('frozen') else {'ready': 'can switch', 'wait': 'busy' if r.get('activity') == 'working' else 'wait', 'needs_project': 'no project yet'}.get(r.get('verdict'), 'unclear')
+        labels.append(f"{i}. {r.get('label') or r.get('project') or 'Unknown session'} — {r.get('agent', 'agent')}, {state}")
     row = rows[choose_fn('Which session do you want to switch?', labels)]
-    if not row.get('continue_command'):
+    command = row.get('continue_command') or []
+    if '--with' not in command[:-1]:
         print('Not safe to switch that one yet: ' + clean((row.get('blocked_reasons') or [row.get('next_step') or 'unknown'])[0]), file=sys.stderr); return 2
-    choices = row.get('destinations') or [row['continue_command'][row['continue_command'].index('--with') + 1]]
-    dest = choices[choose_fn('Continue "' + clean(row.get('label') or row['project']) + '" with', [ENGINES.get(d, d) for d in choices])]
-    argv = list(row['continue_command'])
+    choices = row.get('destinations') or [command[command.index('--with') + 1]]
+    dest = choices[choose_fn('Continue "' + clean(row.get('label') or row.get('project') or 'this session') + '" with', [ENGINES.get(d, d) for d in choices])]
+    argv = list(command)
     argv[argv.index('--with') + 1] = dest
     if row.get('continue_cwd'): os.chdir(row['continue_cwd'])
     return (run or main)(argv[1:])
@@ -750,8 +751,7 @@ def ready_cli(args, rows=None, run=None):
     if not rows:
         print('No open Claude, Codex or Hermes sessions.'); return 0
     print('SKEPTIC — could another engine pick up?')
-    for row in rows:
-        number = rows.index(row) + 1
+    for number, row in enumerate(rows, 1):
         print(f"{number}. {MARKS.get(row.get('verdict'), '  ?  ')}  {clean(row.get('label') or row['project'])}  ({row['agent']}, {clean(row['project'])}) — {clean(row['headline'])}")
         if row.get('continue_command'): print('        ' + ' '.join(shlex.quote(a) for a in row['continue_command']))
         elif row.get('next_step'): print('        ' + clean(row['next_step']))
