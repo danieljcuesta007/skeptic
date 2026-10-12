@@ -241,6 +241,25 @@ class SwitchTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(s.ready_cli(args, rows=([wait], wait), run=lambda argv: self.fail('ran')), 2)
 
+    def test_hermes_is_a_destination_seeded_from_a_private_file(self):
+        models = s.providers(which=lambda p: '/bin/' + p, fetch=lambda url: {})
+        self.assertIn('hermes', [m['id'] for m in models]); self.assertEqual(models[1]['id'], 'codex')
+        hermes = next(m for m in models if m['id'] == 'hermes'); seen = {}
+        def run(argv, cwd, check):
+            path = Path(argv[argv.index('--query-file') + 1]); seen.update(argv=argv, text=path.read_text(), mode=path.stat().st_mode & 0o777, path=path)
+            return type('R', (), {'returncode': 0})()
+        self.assertEqual(s.launch(hermes, str(self.repo), 'PACKET', run=run, scratch=self.root / 'handoffs'), 0)
+        self.assertEqual(seen['argv'][:3], ['/bin/hermes', '--in', str(self.repo)]); self.assertIn('chat', seen['argv'])
+        self.assertEqual(seen['text'], 'PACKET'); self.assertEqual(seen['mode'], 0o600); self.assertFalse(seen['path'].exists())
+
+    def test_hermes_packet_file_removed_even_if_write_fails(self):
+        hermes = {'id': 'hermes', 'executable': '/bin/hermes', 'local': False}
+        class Boom(str):
+            pass
+        with patch('os.fdopen', side_effect=OSError('disk full')), self.assertRaises(OSError):
+            s.launch(hermes, str(self.repo), 'PACKET', run=lambda *a, **k: self.fail('ran'), scratch=self.root / 'handoffs2')
+        self.assertEqual(list((self.root / 'handoffs2').iterdir()), [])
+
     def test_state_symlink_refused(self):
         (self.root / 'state/settings.json').unlink()
         (self.root / 'state/settings.json').symlink_to(self.status)
@@ -258,7 +277,7 @@ class SwitchTests(unittest.TestCase):
 
     def test_malformed_local_models_degrade(self):
         for value in ([], {'models': 'invalid'}, {'models': ['invalid']}, {'data': None}):
-            self.assertEqual(len(s.providers(which=lambda p: '/fake/' + p, fetch=lambda url: value)), 2)
+            self.assertEqual(len(s.providers(which=lambda p: '/fake/' + p, fetch=lambda url: value)), 3)  # claude, codex, hermes; no local models
 
     def test_checkpoint_survives_many_large_instructions(self):
         (self.vault / 'AGENTS.md').write_text('Governing instructions ' * 1000)
@@ -271,7 +290,7 @@ class SwitchTests(unittest.TestCase):
 
     def test_local_provider_failure_degrades(self):
         def fail(url): raise OSError('Unavailable')
-        self.assertEqual(len(s.providers(which=lambda p: '/fake/' + p, fetch=fail)), 2)
+        self.assertEqual(len(s.providers(which=lambda p: '/fake/' + p, fetch=fail)), 3)  # claude, codex, hermes
 
     def test_safe_launch_both_directions_and_failure(self):
         calls = []

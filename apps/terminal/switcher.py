@@ -119,7 +119,7 @@ def choose(title, options, stream=None, output=None, on_enter=None):
 def providers(which=shutil.which, fetch=None):
     result = [{'id': p, 'label': label, 'executable': which(p), 'local': False,
                'availability': 'CLI installed; authentication/quota/model unknown' if which(p) else 'CLI missing'}
-              for p, label in [('claude', 'Claude Code'), ('codex', 'Codex')]]
+              for p, label in [('claude', 'Claude Code'), ('codex', 'Codex'), ('hermes', 'Hermes')]]
     # Only fixed loopback read-only endpoints. Never honor proxy/remote URL environment variables.
     def local_fetch(url):
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
@@ -672,8 +672,23 @@ def requested_model(provider, model):
     return dict(provider, model=model, model_verification='User selected; provider will validate availability')
 
 
-def launch(provider, cwd, packet, run=subprocess.run):
+def launch(provider, cwd, packet, run=subprocess.run, scratch=None):
     if not provider['executable']: raise host.Denied('Selected provider CLI is missing')
+    if provider.get('id') == 'hermes':
+        # Hermes seeds an interactive chat from a file (`chat --query-file`); a
+        # private 0600 file in Skeptic's state dir, removed when Hermes exits.
+        folder = Path(scratch or (Path.home() / '.skeptic-cli' / 'handoffs'))
+        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = folder / ('hermes-' + os.urandom(8).hex() + '.md')
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with os.fdopen(fd, 'w') as out: out.write(packet)
+            argv = [provider['executable'], '--in', str(cwd)]
+            if provider.get('model'): argv += ['-m', provider['model']]
+            return run(argv + ['chat', '--query-file', str(path)], cwd=cwd, check=False).returncode
+        finally:
+            try: path.unlink()
+            except FileNotFoundError: pass
     argv = [provider['executable']]
     if provider['local']: argv += ['--oss', '--local-provider', provider['provider'], '--model', provider['model']]
     elif provider.get('model'): argv += ['--model', provider['model']]
