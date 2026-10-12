@@ -143,6 +143,24 @@ cd "$HOME/Developer/skeptic-managed-integration/apps/terminal"
 python3 -B -W error::ResourceWarning -m unittest -v test_session_review
 ```
 
+## Is it safe to switch right now? — `skeptic ready`
+
+```sh
+skeptic ready          # one line per open Claude / Codex / Hermes session
+skeptic ready --go     # run the best ready continuation
+skeptic ready --json   # what the Vitals widget reads
+```
+
+Each open agent gets a verdict: **Ready** (idle, in a repository, no other
+agent working there; prints the exact `skeptic session continue …` command),
+**Wait** (mid-turn, or another agent is writing in the same repository),
+**Needs** (the session's current directory is not a repository), or **?**
+(the process could not be matched to its session record). The project is the
+session's *current* directory from its own transcript, so a session started
+in `~` that has moved into a repository counts as that repository. Reads
+native session metadata only: no approvals, no history scan, no Git execution.
+The continuation it runs still asks for every approval it needs.
+
 ## Keep your existing Claude session open
 
 Open a **second Mac Terminal**. Use the integration checkout directly so an older

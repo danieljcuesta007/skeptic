@@ -1,5 +1,6 @@
 """Terminal switching engine. No HTTP dependency, document execution, or project writes."""
 import argparse
+import shlex
 import datetime
 import hashlib
 import json
@@ -681,6 +682,43 @@ def launch(provider, cwd, packet, run=subprocess.run):
     return run(argv, cwd=cwd, check=False).returncode
 
 
+def live_rows():
+    """Open agents with a verdict each. Reads native session metadata only
+    (the same scope as the Vitals tile); no approvals, history or Git."""
+    import importlib.util
+    def load(name):
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(name + '.py'))
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); return module
+    inventory, sessions = load('live_inventory'), load('live_sessions')
+    rows = sessions.collect(inventory.collect())
+    return rows, sessions.summary(rows)
+
+
+MARKS = {'ready': 'Ready', 'wait': 'Wait ', 'needs_project': 'Needs', 'unknown': '  ?  '}
+
+
+def ready_cli(args, rows=None, run=None):
+    """skeptic ready: if this agent stopped now, could another pick up?"""
+    rows, best = rows if rows is not None else live_rows()
+    if args.json:
+        print(json.dumps({'summary': best, 'rows': rows}, indent=2)); return 0
+    if not rows:
+        print('No open Claude, Codex or Hermes sessions.'); return 0
+    print('SKEPTIC — could another engine pick up?')
+    for row in rows:
+        print(f"{MARKS.get(row.get('verdict'), '  ?  ')}  {row['agent']} ({row['tty']}) · {clean(row['project'])} — {clean(row['headline'])}")
+        if row.get('continue_command'): print('        ' + ' '.join(shlex.quote(a) for a in row['continue_command']))
+        elif row.get('next_step'): print('        ' + clean(row['next_step']))
+    if args.go:
+        if not best or not best.get('continue_command'):
+            print('Nothing is ready to continue yet.', file=sys.stderr); return 2
+        # Repository continuations read the current directory: run it in the
+        # session's project, not wherever this terminal happens to be.
+        if best.get('continue_cwd'): os.chdir(best['continue_cwd'])
+        return (run or main)(best['continue_command'][1:])
+    return 0
+
+
 def main(argv=None):
     selected_argv = sys.argv[1:] if argv is None else argv
     if not selected_argv:
@@ -694,7 +732,7 @@ def main(argv=None):
         except (host.Denied, __import__('managed_engine').Denied, OSError, ValueError) as error:
             print('Managed switch refused: '+str(error),file=sys.stderr);return 2
     parser = argparse.ArgumentParser(prog='skeptic')
-    parser.add_argument('command', nargs='?', default='switch', choices=['switch', 'continue', 'status', 'doctor', 'models', 'handoff', 'permissions', 'analytics', 'sessions', 'session', 'catchup', 'checkpoint', 'transitions'])
+    parser.add_argument('command', nargs='?', default='switch', choices=['switch', 'continue', 'status', 'doctor', 'models', 'handoff', 'permissions', 'analytics', 'sessions', 'session', 'catchup', 'checkpoint', 'transitions', 'ready'])
     parser.add_argument('action', nargs='?', help='sessions: open|list|pick|review|permissions|revoke; session: handoff|preview|continue|verify')
     parser.add_argument('path', nargs='?')
     parser.add_argument('--with', dest='provider')
@@ -713,8 +751,11 @@ def main(argv=None):
     parser.add_argument('--session-root', help='Explicit custom session storage directory')
     parser.add_argument('--session-file', help='Explicit Codex legacy JSONL transcript/export; no automatic Codex scan')
     parser.add_argument('--continue', dest='continue_open', action='store_true', help='Open-session task confirmation then approved Codex launch; default for bare skeptic')
+    parser.add_argument('--json', action='store_true', help='ready: machine-readable rows')
+    parser.add_argument('--go', action='store_true', help='ready: run the best ready continuation now')
     parser.add_argument('--fresh-session-approval', action='store_true', help='Ask again for metadata and selected-transcript consent even when a matching persistent grant exists')
     args = parser.parse_args(selected_argv)
+    if args.command == 'ready': return ready_cli(args)
     state = None
     try:
         state = State(args.state_dir)
