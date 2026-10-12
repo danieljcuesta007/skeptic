@@ -226,6 +226,19 @@ class SwitchTests(unittest.TestCase):
         self.repo.rename(self.root / 'oldcode'); self.repo.mkdir()
         with patch('sys.stdin.isatty', return_value=False), self.assertRaises(s.host.Denied): self.state.grant(self.repo, 'repository')
 
+    def test_ready_prints_verdicts_and_go_runs_best_command(self):
+        ready = {'agent': 'Claude Code', 'tty': 'ttys001', 'project': 'atlas', 'headline': 'Codex can pick up atlas', 'verdict': 'ready',
+                 'continue_command': ['skeptic', 'session', 'continue', '--id', 'x', '--with', 'codex']}
+        wait = {'agent': 'Claude Code', 'tty': 'ttys002', 'project': 'beta', 'headline': 'Claude is mid-turn', 'verdict': 'wait', 'next_step': 'Wait', 'continue_command': None}
+        args = type('A', (), {'json': False, 'go': True})()
+        ran = []
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(s.ready_cli(args, rows=([ready, wait], ready), run=lambda argv: ran.append(argv) or 0), 0)
+        self.assertIn('Ready', out.getvalue()); self.assertIn('Codex can pick up atlas', out.getvalue())
+        self.assertEqual(ran, [['session', 'continue', '--id', 'x', '--with', 'codex']])
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(s.ready_cli(args, rows=([wait], wait), run=lambda argv: self.fail('ran')), 2)
+
     def test_state_symlink_refused(self):
         (self.root / 'state/settings.json').unlink()
         (self.root / 'state/settings.json').symlink_to(self.status)
