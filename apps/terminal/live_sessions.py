@@ -221,6 +221,7 @@ def claude_task(path, sid, with_cwd=False):
             if not isinstance(record,dict) or record.get('sessionId') != sid: continue
             here = record.get('cwd')
             if isinstance(here,str) and here.startswith('/') and len(here) < 4096: cwd = here
+            limit = False  # only the newest record can say "limit reached"; any later turn clears it
             message = record.get('message') if isinstance(record.get('message'), dict) else {}
             blocks = message.get('content') if isinstance(message.get('content'), list) else []
             if record.get('type') == 'assistant':
@@ -233,7 +234,6 @@ def claude_task(path, sid, with_cwd=False):
                             value = block['input'].get(key)
                             if isinstance(value, str) and value.startswith('/') and len(value) < 4096: touched.append(value)
                     if block.get('type') == 'text' and isinstance(block.get('text'), str) and LIMIT_TEXT.search(block['text'][:2000]): limit = True
-                    elif block.get('type') == 'text': limit = False
             if record.get('type') != 'user': continue
             message = record.get('message') or {}
             content = message.get('content',[]) if isinstance(message,dict) else []
@@ -336,7 +336,7 @@ def assess(rows):
         peers = [r for r in rows if r is not row and project and repo_root(r.get('work_cwd') or r['cwd']) == project]
         busy_peers = [r for r in peers if r['activity'] == 'working' and not r.get('frozen')]
         if busy_peers: blockers.append('Another agent is working in this repository; wait or pick one writer')
-        row['writer'] = 'active' if row['activity'] == 'working' else 'conflict' if busy_peers else 'none' if row['activity'] == 'idle' else 'unknown'
+        row['writer'] = 'frozen' if frozen else 'active' if row['activity'] == 'working' else 'conflict' if busy_peers else 'none' if row['activity'] == 'idle' else 'unknown'
         name = NAMES.get(row['source'], row['agent'])
         dest = NAMES.get(DESTINATION.get(row['source'], ''), 'another engine')
         if not blockers:

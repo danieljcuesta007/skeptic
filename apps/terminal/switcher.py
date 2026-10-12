@@ -681,8 +681,8 @@ def launch(provider, cwd, packet, run=subprocess.run, scratch=None):
         folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         path = folder / ('hermes-' + os.urandom(8).hex() + '.md')
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, 'w') as out: out.write(packet)
         try:
+            with os.fdopen(fd, 'w') as out: out.write(packet)
             argv = [provider['executable'], '--in', str(cwd)]
             if provider.get('model'): argv += ['-m', provider['model']]
             return run(argv + ['chat', '--query-file', str(path)], cwd=cwd, check=False).returncode

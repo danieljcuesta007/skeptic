@@ -89,7 +89,7 @@ class VerdictTests(ClaudeFixture):
     def test_frozen_busy_session_is_switchable_with_warning(self):
         self.write_meta(status='busy'); self.write_transcript(cwd=str(self.repo), age=live.STALL_SECONDS + 60)
         row = self.collect()[0]
-        self.assertEqual(row['verdict'], 'ready'); self.assertIn('looks frozen', row['headline'])
+        self.assertEqual(row['verdict'], 'ready'); self.assertIn('looks frozen', row['headline']); self.assertEqual(row['writer'], 'frozen')
         self.write_transcript(cwd=str(self.repo))  # fresh output: really working
         self.assertEqual(self.collect()[0]['verdict'], 'wait')
 
@@ -98,6 +98,17 @@ class VerdictTests(ClaudeFixture):
         self.write_transcript(cwd=str(self.repo), blocks=[{'type': 'text', 'text': "You've hit your limit · resets 3pm"}])
         row = self.collect()[0]
         self.assertEqual(row['verdict'], 'ready'); self.assertIn('usage limit', row['headline'])
+
+    def test_resumed_after_limit_is_working_again(self):
+        bucket = self.home / '.claude/projects' / ''.join(c if c.isalnum() else '-' for c in str(self.home))
+        self.write_meta(status='busy')
+        self.write_transcript(cwd=str(self.repo), blocks=[{'type': 'text', 'text': "You've hit your limit"}])
+        path = bucket / (self.sid + '.jsonl')
+        with open(path, 'a') as f:  # the user resumed; Claude is calling tools again
+            f.write(json.dumps({'sessionId': self.sid, 'type': 'user', 'cwd': str(self.repo), 'message': {'content': 'continue'}}) + '\n')
+            f.write(json.dumps({'sessionId': self.sid, 'type': 'assistant', 'cwd': str(self.repo), 'message': {'content': [{'type': 'tool_use', 'input': {'command': 'ls'}}]}}) + '\n')
+        row = self.collect()[0]
+        self.assertEqual(row['verdict'], 'wait'); self.assertNotIn('frozen', row)
 
     def test_home_session_project_from_touched_files(self):
         self.write_transcript(cwd=str(self.home), blocks=[{'type': 'tool_use', 'name': 'Edit', 'input': {'file_path': str(self.repo / 'src' / 'app.py')}}])

@@ -252,6 +252,14 @@ class SwitchTests(unittest.TestCase):
         self.assertEqual(seen['argv'][:3], ['/bin/hermes', '--in', str(self.repo)]); self.assertIn('chat', seen['argv'])
         self.assertEqual(seen['text'], 'PACKET'); self.assertEqual(seen['mode'], 0o600); self.assertFalse(seen['path'].exists())
 
+    def test_hermes_packet_file_removed_even_if_write_fails(self):
+        hermes = {'id': 'hermes', 'executable': '/bin/hermes', 'local': False}
+        class Boom(str):
+            pass
+        with patch('os.fdopen', side_effect=OSError('disk full')), self.assertRaises(OSError):
+            s.launch(hermes, str(self.repo), 'PACKET', run=lambda *a, **k: self.fail('ran'), scratch=self.root / 'handoffs2')
+        self.assertEqual(list((self.root / 'handoffs2').iterdir()), [])
+
     def test_state_symlink_refused(self):
         (self.root / 'state/settings.json').unlink()
         (self.root / 'state/settings.json').symlink_to(self.status)
