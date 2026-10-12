@@ -79,6 +79,12 @@ class VerdictTests(ClaudeFixture):
         self.assertEqual(out['continue_command'][:5], ['skeptic', 'session', 'continue', '--source', 'codex'])
         self.assertEqual(out['continue_cwd'], str(self.repo))
 
+    def test_idle_with_automatic_or_queued_work_waits(self):
+        base = {'id': 'h', 'agent': 'Hermes', 'pid': 9, 'tty': 't', 'source': 'hermes', 'association': 'native', 'activity': 'idle', 'cwd': '/nowhere'}
+        for extra in ({'automation_pending': True, 'automation_evidence': 'Active goal'}, {'queued_turns': 2}):
+            out = live.assess([dict(base, **extra)])[0]
+            self.assertEqual(out['verdict'], 'wait'); self.assertEqual(out['readiness'], 'blocked')
+
     def test_summary_prefers_ready(self):
         rows = [{'verdict': 'wait', 'source': 'claude'}, {'verdict': 'ready', 'source': 'codex'}]
         self.assertEqual(live.summary(rows)['verdict'], 'ready'); self.assertIsNone(live.summary([]))

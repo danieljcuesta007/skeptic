@@ -317,6 +317,9 @@ def assess(rows):
                        next_step=f'Continue in {dest}', continue_command=continue_command(row, project))
         elif row['activity'] == 'working':
             row.update(readiness='blocked', verdict='wait', headline=f'{name} is mid-turn', next_step='Wait for this turn to finish', continue_command=None)
+        elif row.get('automation_pending') or row.get('queued_turns'):
+            # Idle now, but a goal, loop, delegate or queued turn will write again.
+            row.update(readiness='blocked', verdict='wait', headline=f'{name} has queued or automatic work', next_step=blockers[0] if blockers else 'Resolve queued work first', continue_command=None)
         elif row['association'] == 'unlinked' or row['activity'] == 'unknown':
             row.update(readiness='blocked', verdict='unknown', headline=f'Can\'t read this {name} session', next_step=blockers[0], continue_command=None)
         elif not project:
