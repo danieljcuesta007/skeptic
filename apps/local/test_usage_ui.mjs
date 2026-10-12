@@ -5,7 +5,8 @@ import test from 'node:test';
 
 // DOM is the boundary: execute the production renderer, never duplicate it here.
 class Element {
-  constructor(tag='div'){this.tag=tag;this.children=[];this.value='';this.textContent='';this.handlers={};this.attributes={};}
+  constructor(tag='div'){this.tag=tag;this.children=[];this.value='';this.textContent='';this.handlers={};this.attributes={};this.dataset={};}
+  querySelectorAll(sel){return sel==='details[open]'?this.children.filter(c=>c.tag==='details'&&c.open):[];}
   append(...children){this.children.push(...children);}
   replaceChildren(...children){this.children=children;}
   addEventListener(name,handler){this.handlers[name]=handler;}
@@ -21,6 +22,7 @@ function fixture(){
     units:s=>s.replaceAll('w.unit','"credits"'),
     remaining:s=>s.replace('meter.value=w.display_remaining','meter.value=100-w.display_remaining'),
     expired:s=>s.replace('Unknown — refresh needed','100% available'),
+    reopen:s=>s.replace('card.open=open.has(s.id);',''),
   };
   if(process.env.SKEPTIC_UI_FAULT)source=faults[process.env.SKEPTIC_UI_FAULT](source);
   vm.runInContext(source,context);
@@ -41,4 +43,12 @@ test('continuity uses backend blockers and gates offline controls',async()=>{
  await vm.runInContext('refreshContinuity()',f.context);
  const cards=f.ids.get('continuity-sessions');assert.match(text(cards),/Source identity uncertain/);assert.match(text(cards),/stale/);assert.match(text(cards),/caller-reported/);assert.match(text(cards),/Prepare offline handoff/);assert.doesNotMatch(text(cards),/handoff_complete/);
  f.context.fetch=async()=>{throw new Error('disconnect')};await vm.runInContext('refreshContinuity()',f.context);assert.equal(cards.children.length,0);assert.match(f.ids.get('continuity-status').textContent,/disconnected.*unknown/);
+});
+test('refresh keeps an expanded card open and its control output',async()=>{
+ const f=fixture();let n=1;const session=()=>({id:'one',project:'P',agent:'claude',readiness:'handoff_blocked',activity:'idle',verification:'stale',checkpoint_fresh:false,dirty:false,objective:'o'+n,cwd:'/p',writer:'unknown',pending:[],blocked_reasons:['b'],verification_provenance:[]});
+ f.context.fetch=async()=>({ok:true,json:async()=>({engine:'e',monitoring:'m',capabilities:{prepare_offline:false},sessions:[session()]})});
+ await vm.runInContext('refreshContinuity()',f.context);
+ const cards=f.ids.get('continuity-sessions');cards.children[0].open=true;
+ n=2;await vm.runInContext('refreshContinuity()',f.context);
+ assert.equal(cards.children[0].open,true);assert.match(text(cards),/o2/);
 });

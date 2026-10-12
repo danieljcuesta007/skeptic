@@ -138,6 +138,9 @@ async function continuityControl(request){
  const response=await fetch('/api/continuity/control',{method:'POST',headers:{'Content-Type':'application/json','X-Skeptic-Token':token},body:JSON.stringify(request)});
  const data=await response.json();if(!response.ok)throw new Error(data.error||'Engine request rejected');return data;
 }
+// The 5-second refresh must not undo what the person is doing: keep expanded
+// cards open and control output in place, and skip the rebuild when nothing changed.
+const continuityOutputs=new Map();let continuityLast='';
 async function refreshContinuity(){
  const status=$('continuity-status'),list=$('continuity-sessions');
  try{
@@ -146,25 +149,28 @@ async function refreshContinuity(){
   const data=await response.json();
   continuityPaused=data.monitoring==='paused';$('continuity-pause').disabled=!data.capabilities.pause_monitoring;$('continuity-pause').textContent=continuityPaused?'Resume isolated monitoring':'Pause isolated monitoring';
   status.textContent=`${data.engine} · ${data.monitoring} · ${data.sessions.length} observed sessions`;
+  const snapshot=JSON.stringify([data.sessions,data.capabilities]);if(snapshot===continuityLast)return;continuityLast=snapshot;
+  const open=new Set([...list.querySelectorAll('details[open]')].map(d=>d.dataset.session));
   list.replaceChildren(...data.sessions.map(s=>{
-   const card=node('details',undefined,'source-card');card.append(node('summary',`${s.project} · ${s.agent} · ${s.readiness}`));
+   const card=node('details',undefined,'source-card');card.dataset.session=s.id;card.open=open.has(s.id);card.append(node('summary',`${s.project} · ${s.agent} · ${s.readiness}`));
    card.append(node('p',`Activity: ${s.activity} · verification: ${s.verification} · checkpoint: ${s.checkpoint_fresh?'fresh':'stale'} · dirty work: ${s.dirty?'present':'none observed'}`));
    card.append(node('p',`Evidence provenance: ${(s.verification_provenance||[]).join('; ')||'unknown'}`));
    card.append(node('p',s.objective),node('p',s.cwd,'path'),node('p',`Writer: ${s.writer}`));
    card.append(node('h3','Outstanding work'),...s.pending.map(t=>node('p',t)),node('h3','Handoff blockers'),...s.blocked_reasons.map(t=>node('p',t)));
    if(data.capabilities.prepare_offline){
-    const output=node('pre',''),controls=node('div',undefined,'actions');
+    const output=node('pre',continuityOutputs.get(s.id)||''),controls=node('div',undefined,'actions');
     for(const [label,op] of [['View checkpoint','checkpoint'],['View evidence','evidence'],['Prepare offline handoff to Hermes','prepare']]){
      const button=node('button',label,'secondary');button.type='button';button.addEventListener('click',()=>run(async()=>{
       const result=await continuityControl({op,session:s.id,...(op==='prepare'?{destination:'hermes'}:{})});
       output.textContent=result.markdown ? `${result.delivery||'Checkpoint'}\n${(result.assessment?.reasons||[]).join('\n')}\n${result.markdown}` : JSON.stringify(result,null,2);
+      continuityOutputs.set(s.id,output.textContent);
      }));controls.append(button);
     }
     card.append(controls,output);
    }
    return card;
   }));
- }catch(error){$('continuity-pause').disabled=true;status.textContent='Engine disconnected · readiness unknown';list.replaceChildren();}
+ }catch(error){$('continuity-pause').disabled=true;status.textContent='Engine disconnected · readiness unknown';list.replaceChildren();continuityLast='';}
 }
 $('continuity-pause').addEventListener('click',()=>run(async()=>{await continuityControl({op:continuityPaused?'resume':'pause'});await refreshContinuity();}));
 $('continuity-refresh').addEventListener('click',()=>run(refreshContinuity));
