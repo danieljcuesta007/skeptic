@@ -75,3 +75,38 @@ if __name__ == '__main__':
     selected = False if a.no_integrations or a.integration == 'none' else True if a.integration == 'all' else [a.integration]
     try: install(Path.home(), selected, not a.no_profile, a.upgrade_integrations)
     except (OSError, ValueError) as exc: print('Installation: ' + str(exc), file=sys.stderr); sys.exit(1)
+
+
+def activate_launcher(home, source=HERE):
+    """Only retarget a recognized Skeptic launcher, keeping an exact rollback copy."""
+    home, source = Path(home), Path(source)
+    target = home / '.local/bin/skeptic'
+    safe_parent(target.parent)
+    if target.is_symlink(): raise ValueError('Symlinked launcher preserved')
+    info = target.stat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
+        raise ValueError('Unsafe launcher preserved')
+    original = target.read_text()
+    prefix = '#!/bin/sh\n# Skeptic launcher; rerun installer after moving repository.\nexec '
+    # Recognized one-command generated launcher only; preserve customized scripts.
+    if not original.startswith(prefix) or len(original.splitlines()) != 3:
+        raise ValueError('Unrecognized launcher preserved')
+    words = shlex.split(original.splitlines()[2])
+    if len(words) != 5 or words[0] != 'exec' or words[2] != '-B' or words[4] != '$@' or not words[3].endswith('/apps/terminal/switcher.py'):
+        raise ValueError('Customized launcher preserved')
+    relative = source.relative_to(home)
+    if '"' in str(relative) or '$' in str(relative) or '`' in str(relative) or '\n' in str(relative):
+        raise ValueError('Unsupported launcher path')
+    replacement = prefix + 'python3 -B "$HOME/' + str(relative / 'switcher.py') + '" "$@"\n'
+    if original == replacement: return target
+    backup = target.with_name('skeptic.before-integration')
+    write_owned(backup, original, stat.S_IMODE(info.st_mode))
+    # Check again before replacing the owned file. Shell configuration is untouched.
+    fd = os.open(target, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        current = os.fstat(fd)
+        if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino) or os.read(fd, 65537).decode() != original:
+            raise ValueError('Launcher changed during activation; preserved')
+        os.lseek(fd, 0, os.SEEK_SET); os.write(fd, replacement.encode()); os.ftruncate(fd, len(replacement.encode())); os.fsync(fd)
+    finally: os.close(fd)
+    return target

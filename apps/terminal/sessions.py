@@ -60,8 +60,8 @@ def atomic_json(state, name, data):
 
 
 class Access:
-    def __init__(self, state, ask=None):
-        self.state, self.ask = state, ask or input
+    def __init__(self, state, ask=None, force_prompt=False):
+        self.state, self.ask, self.force_prompt = state, ask or input, bool(force_prompt)
         self.data = state.read('sessions.json', {'grants': {}})
         if not isinstance(self.data, dict) or set(self.data) != {'grants'} or not isinstance(self.data['grants'], dict): raise host.Denied('Invalid session consent state')
         for key, value in self.data['grants'].items():
@@ -69,7 +69,7 @@ class Access:
 
     def consent(self, key, info, message):
         identity = [info.st_dev, info.st_ino]
-        if self.data['grants'].get(key) != identity:
+        if self.force_prompt or self.data['grants'].get(key) != identity:
             if not sys.stdin.isatty(): raise host.Denied('Session approval required in a second Terminal; original Claude can stay open')
             print(sanitize(message))
             print('Persistent permission; revoke with: skeptic sessions revoke')
@@ -214,7 +214,7 @@ class ClaudeAdapter:
             return results
         finally: os.close(rootfd)
 
-    def snapshot(self, access, session):
+    def snapshot(self, access, session, inventory=False):
         scopefd = host.open_directory(session['scope'])
         try: access.check(session['scope_key'], os.fstat(scopefd))
         finally: os.close(scopefd)
@@ -227,7 +227,7 @@ class ClaudeAdapter:
             rows, malformed = rows_from_chunks(chunks)
             if not rows: raise host.Denied('Selected transcript has no readable complete records')
             snapshot_hash = hashlib.sha256(b''.join(str(offset).encode() + b'\0' + body for offset, body in chunks)).hexdigest()
-            extracted = self.extract(rows, session['id'])
+            extracted = extract_claude(rows, session['id'], inventory=True) if inventory and self.source == 'claude' else self.extract(rows, session['id'])
             if not extracted['records']: raise host.Denied('Selected transcript has no accessible conversation text/tool summaries')
             return {**session, **extracted, 'root': str(self.root), 'access_key': key, 'identity': [info.st_dev, info.st_ino],
                     'snapshot_sha256': snapshot_hash, 'byte_windows': [[off, len(body)] for off, body in chunks],
@@ -292,7 +292,7 @@ def substantive_request(text):
         r'(?i)\s*(?:continue|try again|again|retry|go ahead|yes|ok|okay|u good|just|jus|/skeptic|/resume|/status|/cost|/model|/rate-limit-options)[.!?\s]*', text))
 
 
-def extract_claude(rows, session_id, historical_pass=False):
+def extract_claude(rows, session_id, historical_pass=False, inventory=False):
     entries = [(offset, line, row) for offset, line, row in rows if row.get('sessionId') in (None, session_id)
                and not row.get('isSidechain') and not row.get('teamName')]
     messages = [entry for entry in entries if entry[2].get('type') in ('user', 'assistant') and not entry[2].get('isMeta')]
@@ -401,6 +401,18 @@ def extract_claude(rows, session_id, historical_pass=False):
                 if record.get('role') in ('user', 'provider-notice (unverified)', 'recovery-gap'): continue
                 historical.append(dict(record, role='historical-' + record['role'] + ' (outside recovered chain; unverified)'))
         if historical: gap = True
+    if inventory:
+        # Review retains earlier requests independently of the latest-task packet.
+        # Historical branches remain explicitly unverified, never active instructions.
+        ordered = sorted([r for r in records + historical if r.get('role') != 'provider-notice (unverified)'],
+                         key=lambda r: (r.get('window_offset', 0), r.get('window_line', 0)))
+        retained, size = [], 0
+        for record in ordered:
+            length = len(json.dumps(record, ensure_ascii=False).encode())
+            if len(retained) >= 1000 or size + length > 256000: break
+            retained.append(record); size += length
+        return {'records': retained, 'file_references': sorted(paths)[:40], 'cwd': cwd,
+                'chain_gap': gap, 'inventory_omitted': len(ordered) - len(retained)}
     # Keep the original objective plus recent substantive requests, not quota spam.
     objective = next((r for r in records if r.get('role') == 'user'), None)
     historical_requests = [r for r in historical if r['role'].startswith('historical-user-request')]
@@ -417,11 +429,22 @@ def extract_claude(rows, session_id, historical_pass=False):
     return {'records': retained, 'file_references': sorted(paths)[:40], 'cwd': cwd, 'chain_gap': gap}
 
 
+class SessionLabel(str):
+    """Existing label text plus display-only fields from already discovered metadata."""
+    def __new__(cls, session):
+        label = super().__new__(cls, session['title'] + ' | ' + session['updated'] + ' | ' +
+                                str(session['cwd']) + ' | ' + session['id'])
+        label.picker_title = session['title']
+        label.picker_details = (('Updated', session['updated']), ('Directory', session['cwd']),
+                                ('ID', session['id']))
+        return label
+
+
 def selected_session(adapter, access, project, picker, title=None, session_id=None, all_projects=False):
     sessions = adapter.discover(access, project, all_projects, session_id, title)
     if not sessions: raise host.Denied('No matching accessible session in this scope/window; try --all-projects or --id, or verify retention/storage location')
     if len(sessions) == 1: return sessions[0]
-    labels = [s['title'] + ' | ' + s['updated'] + ' | ' + str(s['cwd']) + ' | ' + s['id'] for s in sessions]
+    labels = [SessionLabel(s) for s in sessions]
     return sessions[picker('SKEPTIC — SELECT CLAUDE SESSION', labels)]
 
 

@@ -536,7 +536,23 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(int(lengths[0])))
             if not isinstance(data, dict): raise Denied('Request object required')
             registry = self.server.registry
-            if self.path == '/api/preferences':
+            if self.path == '/api/continuity':
+                if data != {}:raise Denied('Observation request accepts no fields')
+                import sys
+                from pathlib import Path
+                sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terminal'))
+                from continuity_service import load_observation
+                client=getattr(self.server,'continuity_client',None)
+                try:self.reply(200,client.request({'op':'observe'}) if client else load_observation(getattr(self.server,'continuity_fixture',None)))
+                except (ValueError,OSError):self.reply(200,{'version':1,'engine':'disconnected','monitoring':'unknown','sessions':[],'capabilities':{'live_switch':False,'pause_monitoring':False}})
+            elif self.path == '/api/continuity/control':
+                client=getattr(self.server,'continuity_client',None)
+                if client is None:raise Denied('Isolated socket engine not connected')
+                fields={'pause':{'op'},'resume':{'op'},'checkpoint':{'op','session'},'evidence':{'op','session'},'prepare':{'op','session','destination'}}
+                if not isinstance(data.get('op'),str) or set(data)!=fields.get(data['op'],set()):raise Denied('Unsupported operation or control fields')
+                try:self.reply(200,client.request(data))
+                except (ValueError,OSError):raise Denied('Engine unavailable or request rejected')
+            elif self.path == '/api/preferences':
                 self.reply(200, self.server.preferences.request(data))
             elif self.path == '/api/usage':
                 self.reply(200, self.server.usage.request(data))
