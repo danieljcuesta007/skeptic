@@ -80,6 +80,15 @@ class LauncherTests(unittest.TestCase):
             self.assertIn('"$HOME/Developer/skeptic/apps/terminal/switcher.py"',target.read_text())
             self.assertEqual(earlier.read_text(),'earlier rollback')
             self.assertEqual([p.read_text() for p in (home/'.local/bin').glob('skeptic.before-2*')],[old])
+            # A second retarget in the same second keeps both rollback copies.
+            second=target.read_text()
+            target.write_text(old)
+            with patch.object(install,'HERE',home/'Developer/skeptic/apps/terminal'), patch.object(install.time,'strftime',return_value='20261012-000000'), patch('builtins.print'):
+                (home/'.local/bin/skeptic.before-20261012-000000').write_text('taken')
+                install.install(home,integrations=False,profile=False)
+            self.assertEqual((home/'.local/bin/skeptic.before-20261012-000000').read_text(),'taken')
+            self.assertEqual((home/'.local/bin/skeptic.before-20261012-000000-1').read_text(),old)
+            self.assertEqual(target.read_text(),second)
     def test_custom_launcher_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory).resolve(); (home/'.local/bin').mkdir(parents=True)

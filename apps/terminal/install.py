@@ -109,7 +109,10 @@ def activate_launcher(home, source=HERE):
     if original == replacement: return target
     backup = target.with_name('skeptic.before-integration')
     if backup.exists() and backup.read_text() != original:  # keep every earlier rollback copy
-        backup = target.with_name('skeptic.before-' + time.strftime('%Y%m%d-%H%M%S'))
+        stamp, n = time.strftime('%Y%m%d-%H%M%S'), 0
+        backup = target.with_name('skeptic.before-' + stamp)
+        while backup.exists() and backup.read_text() != original:  # same-second retargets
+            n += 1; backup = target.with_name(f'skeptic.before-{stamp}-{n}')
     write_owned(backup, original, stat.S_IMODE(info.st_mode))
     # Check again before replacing the owned file. Shell configuration is untouched.
     fd = os.open(target, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
