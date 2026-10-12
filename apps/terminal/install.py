@@ -73,18 +73,6 @@ def install(home, integrations=True, profile=True, upgrade=False):
     print('From Claude: Ctrl+Z returns to the same shell without closing it; run skeptic. Second Terminal is the fallback.')
 
 
-if __name__ == '__main__':
-    p = argparse.ArgumentParser()
-    p.add_argument('--upgrade-integrations', action='store_true', help='Upgrade only recognized Step 43D helper files; preserve all other content')
-    p.add_argument('--no-integrations', action='store_true')
-    p.add_argument('--no-profile', action='store_true')
-    p.add_argument('--integration', choices=['all', 'claude', 'codex', 'none'], default='all')
-    a = p.parse_args()
-    selected = False if a.no_integrations or a.integration == 'none' else True if a.integration == 'all' else [a.integration]
-    try: install(Path.home(), selected, not a.no_profile, a.upgrade_integrations)
-    except (OSError, ValueError) as exc: print('Installation: ' + str(exc), file=sys.stderr); sys.exit(1)
-
-
 def activate_launcher(home, source=HERE):
     """Only retarget a recognized Skeptic launcher, keeping an exact rollback copy."""
     home, source = Path(home), Path(source)
@@ -102,10 +90,11 @@ def activate_launcher(home, source=HERE):
     words = shlex.split(original.splitlines()[2])
     if len(words) != 5 or words[0] != 'exec' or words[2] != '-B' or words[4] != '$@' or not words[3].endswith('/apps/terminal/switcher.py'):
         raise ValueError('Customized launcher preserved')
-    relative = source.relative_to(home)
-    if '"' in str(relative) or '$' in str(relative) or '`' in str(relative) or '\n' in str(relative):
+    try: path = '$HOME/' + str(source.relative_to(home) / 'switcher.py')
+    except ValueError: path = str(source / 'switcher.py')  # checkout outside home: absolute path
+    if '"' in path.replace('$HOME/', '', 1) or '$' in path.replace('$HOME/', '', 1) or '`' in path or '\n' in path:
         raise ValueError('Unsupported launcher path')
-    replacement = prefix + 'python3 -B "$HOME/' + str(relative / 'switcher.py') + '" "$@"\n'
+    replacement = prefix + 'python3 -B "' + path + '" "$@"\n'
     if original == replacement: return target
     backup = target.with_name('skeptic.before-integration')
     if backup.exists() and backup.read_text() != original:  # keep every earlier rollback copy
@@ -123,3 +112,14 @@ def activate_launcher(home, source=HERE):
         os.lseek(fd, 0, os.SEEK_SET); os.write(fd, replacement.encode()); os.ftruncate(fd, len(replacement.encode())); os.fsync(fd)
     finally: os.close(fd)
     return target
+
+if __name__ == '__main__':
+    p = argparse.ArgumentParser()
+    p.add_argument('--upgrade-integrations', action='store_true', help='Upgrade only recognized Step 43D helper files; preserve all other content')
+    p.add_argument('--no-integrations', action='store_true')
+    p.add_argument('--no-profile', action='store_true')
+    p.add_argument('--integration', choices=['all', 'claude', 'codex', 'none'], default='all')
+    a = p.parse_args()
+    selected = False if a.no_integrations or a.integration == 'none' else True if a.integration == 'all' else [a.integration]
+    try: install(Path.home(), selected, not a.no_profile, a.upgrade_integrations)
+    except (OSError, ValueError) as exc: print('Installation: ' + str(exc), file=sys.stderr); sys.exit(1)

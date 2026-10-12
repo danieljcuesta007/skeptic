@@ -1,3 +1,4 @@
+import sys
 import contextlib
 import fcntl
 import io
@@ -89,6 +90,20 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual((home/'.local/bin/skeptic.before-20261012-000000').read_text(),'taken')
             self.assertEqual((home/'.local/bin/skeptic.before-20261012-000000-1').read_text(),old)
             self.assertEqual(target.read_text(),second)
+    def test_installer_script_retargets_end_to_end(self):
+        # Run install.py as Daniel does (python3 install.py), not as an import:
+        # the main block once ran before activate_launcher was defined.
+        with tempfile.TemporaryDirectory() as directory:
+            home=Path(directory).resolve(); (home/'.local/bin').mkdir(parents=True)
+            target=home/'.local/bin/skeptic'
+            target.write_text('#!/bin/sh\n# Skeptic launcher; rerun installer after moving repository.\nexec python3 -B "$HOME/Developer/old/apps/terminal/switcher.py" "$@"\n'); target.chmod(0o700)
+            checkout=home/'Developer/skeptic/apps/terminal'; checkout.mkdir(parents=True)
+            script=checkout/'install.py'; script.write_text(Path(install.__file__).read_text())
+            env=dict(os.environ,HOME=str(home))
+            result=subprocess.run([sys.executable,'-B',str(script),'--no-profile','--no-integrations'],env=env,capture_output=True,text=True,timeout=30)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn('"$HOME/Developer/skeptic/apps/terminal/switcher.py"',target.read_text())
+            self.assertNotIn('Developer/old/',target.read_text())
     def test_custom_launcher_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory).resolve(); (home/'.local/bin').mkdir(parents=True)
