@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shlex
 import stat
+import time
 import sys
 
 HERE = Path(__file__).resolve().parent
@@ -42,7 +43,14 @@ def install(home, integrations=True, profile=True, upgrade=False):
     home = Path(home)
     bindir = home / '.local/bin'; safe_parent(bindir)
     launcher = '#!/bin/sh\n# Skeptic launcher; rerun installer after moving repository.\nexec ' + shlex.quote(sys.executable) + ' -B ' + shlex.quote(str(HERE / 'switcher.py')) + ' "$@"\n'
-    write_owned(bindir / 'skeptic', launcher, 0o700)
+    try: write_owned(bindir / 'skeptic', launcher, 0o700)
+    except ValueError as error:
+        # A launcher this installer generated for another checkout (the repo
+        # moved, or an old work branch): retarget it with a rollback copy.
+        # activate_launcher still preserves any customized script.
+        if not str(error).startswith('Existing file differs'): raise
+        activate_launcher(home, HERE)
+        print('Retargeted existing Skeptic launcher to ' + str(HERE) + ' (previous copy kept beside it)')
     if profile:
         target = home / '.zshrc'
         if target.is_symlink(): raise ValueError('Symlinked .zshrc preserved; add ~/.local/bin to PATH manually')
@@ -100,6 +108,11 @@ def activate_launcher(home, source=HERE):
     replacement = prefix + 'python3 -B "$HOME/' + str(relative / 'switcher.py') + '" "$@"\n'
     if original == replacement: return target
     backup = target.with_name('skeptic.before-integration')
+    if backup.exists() and backup.read_text() != original:  # keep every earlier rollback copy
+        stamp, n = time.strftime('%Y%m%d-%H%M%S'), 0
+        backup = target.with_name('skeptic.before-' + stamp)
+        while backup.exists() and backup.read_text() != original:  # same-second retargets
+            n += 1; backup = target.with_name(f'skeptic.before-{stamp}-{n}')
     write_owned(backup, original, stat.S_IMODE(info.st_mode))
     # Check again before replacing the owned file. Shell configuration is untouched.
     fd = os.open(target, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
