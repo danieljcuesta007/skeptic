@@ -143,6 +143,15 @@ cd "$HOME/Developer/skeptic-managed-integration/apps/terminal"
 python3 -B -W error::ResourceWarning -m unittest -v test_session_review
 ```
 
+## Switch one window — `skeptic`
+
+You usually have several Claude windows open. Type `skeptic` and choose
+**Switch one of my open sessions**: every open Claude / Codex / Hermes window is
+listed by its Terminal tab title (the name Claude gives each tab, e.g.
+"2. Margarita realtor website — Claude Code, can switch"), numbered in tab
+order. Pick one, then pick the AI to continue it with. Only that window's work
+moves; the others stay exactly as they are, for when Claude is back.
+
 ## Is it safe to switch right now? — `skeptic ready`
 
 ```sh

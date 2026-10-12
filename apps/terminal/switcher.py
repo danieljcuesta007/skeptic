@@ -712,16 +712,47 @@ def live_rows():
 MARKS = {'ready': 'Ready', 'wait': 'Wait ', 'needs_project': 'Needs', 'unknown': '  ?  '}
 
 
+def ordered(rows):
+    """Terminal-tab order, so numbers match the widget and named tabs."""
+    return sorted(rows, key=lambda r: r.get('tty', ''))
+
+
+ENGINES = {'codex': 'Codex', 'hermes': 'Hermes', 'claude': 'Claude Code'}
+
+
+def switch_open_session(rows=None, choose_fn=None, run=None):
+    """Pick ONE open session by its tab title, then the engine to continue it.
+    Sessions you leave alone stay as they are (keep them for when Claude is back)."""
+    choose_fn = choose_fn or choose
+    rows = ordered(rows if rows is not None else live_rows()[0])
+    if not rows: print('No Claude, Codex or Hermes open right now.'); return 0
+    labels = []
+    for i, r in enumerate(rows, 1):
+        state = 'frozen, can switch' if r.get('frozen') else {'ready': 'can switch', 'wait': 'busy' if r['activity'] == 'working' else 'wait', 'needs_project': 'no project yet'}.get(r.get('verdict'), 'unclear')
+        labels.append(f"{i}. {r.get('label') or r['project']} — {r['agent']}, {state}")
+    row = rows[choose_fn('Which session do you want to switch?', labels)]
+    if not row.get('continue_command'):
+        print('Not safe to switch that one yet: ' + clean((row.get('blocked_reasons') or [row.get('next_step') or 'unknown'])[0]), file=sys.stderr); return 2
+    choices = row.get('destinations') or [row['continue_command'][row['continue_command'].index('--with') + 1]]
+    dest = choices[choose_fn('Continue "' + clean(row.get('label') or row['project']) + '" with', [ENGINES.get(d, d) for d in choices])]
+    argv = list(row['continue_command'])
+    argv[argv.index('--with') + 1] = dest
+    if row.get('continue_cwd'): os.chdir(row['continue_cwd'])
+    return (run or main)(argv[1:])
+
+
 def ready_cli(args, rows=None, run=None):
     """skeptic ready: if this agent stopped now, could another pick up?"""
     rows, best = rows if rows is not None else live_rows()
+    rows = ordered(rows)
     if args.json:
         print(json.dumps({'summary': best, 'rows': rows}, indent=2)); return 0
     if not rows:
         print('No open Claude, Codex or Hermes sessions.'); return 0
     print('SKEPTIC — could another engine pick up?')
     for row in rows:
-        print(f"{MARKS.get(row.get('verdict'), '  ?  ')}  {row['agent']} ({row['tty']}) · {clean(row['project'])} — {clean(row['headline'])}")
+        number = rows.index(row) + 1
+        print(f"{number}. {MARKS.get(row.get('verdict'), '  ?  ')}  {clean(row.get('label') or row['project'])}  ({row['agent']}, {clean(row['project'])}) — {clean(row['headline'])}")
         if row.get('continue_command'): print('        ' + ' '.join(shlex.quote(a) for a in row['continue_command']))
         elif row.get('next_step'): print('        ' + clean(row['next_step']))
     if args.go:
@@ -777,7 +808,11 @@ def main(argv=None):
         if args.command == 'switch':
             args.interactive_switch = True
             print('SKEPTIC — Your work. Your memory. Any AI.')
-            workflow = choose('Continue your work', ['Recover a Claude session (local, consent required)', 'Continue this project from approved notes and Git'])
+            workflow = choose('Continue your work', ['Switch one of my open sessions to another AI', 'Recover a Claude session (local, consent required)', 'Continue this project from approved notes and Git'])
+            if workflow == 0:
+                state.close(); state = None
+                return switch_open_session()
+            workflow -= 1
             if workflow == 0:
                 args.command = 'session'; args.action = 'continue'; args.source = 'claude'
                 # Explicit menu choice requests discovery; scope consent still precedes reads.

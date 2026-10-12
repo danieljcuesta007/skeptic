@@ -74,7 +74,7 @@ class FrozenWorkflowTests(unittest.TestCase):
   class Terminal(io.StringIO):
    def isatty(self):return True
   terminal=Terminal()
-  with contextlib.redirect_stdout(terminal),patch('sys.stdin.isatty',return_value=True),patch.object(s,'providers',return_value=[model]),patch.object(s,'choose',return_value=0),patch('builtins.input',side_effect=['project-clear','evidence','send']):
+  with contextlib.redirect_stdout(terminal),patch('sys.stdin.isatty',return_value=True),patch.object(s,'providers',return_value=[model]),patch.object(s,'choose',side_effect=lambda title,*a,**k: 1 if title=='Continue your work' else 0),patch('builtins.input',side_effect=['project-clear','evidence','send']):
    result=s.main(['--id',ID,'--cwd',str(self.repo),'--session-root',str(self.storage),'--state-dir',str(self.root/'state'),'--vault',str(self.vault)])
   self.assertEqual(result,0);self.assertEqual(self.file.read_bytes(),before)
   data=json.loads(capture.read_text());self.assertEqual(data['cwd'],str(self.repo));self.assertIn('Continue the reply',data['prompt']);self.assertIn(data['prompt'],terminal.getvalue())
