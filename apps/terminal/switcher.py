@@ -1,5 +1,6 @@
 """Terminal switching engine. No HTTP dependency, document execution, or project writes."""
 import argparse
+from contextlib import contextmanager
 import shlex
 import datetime
 import hashlib
@@ -322,7 +323,10 @@ def vault_candidates(root, fd, repo):
 
 def assemble(state, cwd, vault, task='', picker=choose, session=None, target=None):
     conversation_only = bool(session and session.get("conversation_only"))
-    home_session = session is not None and (Path(cwd) == Path.home() or conversation_only)
+    # A vault-root conversation uses the existing bounded vault reader, never
+    # requests a repository grant over the entire knowledge base.
+    vault_session = session is not None and Path(cwd) == Path(os.path.expanduser(vault))
+    home_session = session is not None and (Path(cwd) == Path.home() or conversation_only or vault_session)
     project_gap = None
     try: repo = str(cwd) if home_session else repository(cwd)
     except (host.Denied, OSError):
@@ -333,7 +337,7 @@ def assemble(state, cwd, vault, task='', picker=choose, session=None, target=Non
     if not home_session: repo, rfd = state.grant(repo, 'repository')
     vfd = None
     try:
-        try: git = {'branch': None, 'head': None, 'changes': None, 'limitation': project_gap or ('Conversation-only recovery: project/Git reads withheld' if conversation_only else 'Home-started session: home files/Git not scanned')} if home_session else git_state(repo)
+        try: git = {'branch': None, 'head': None, 'changes': None, 'limitation': project_gap or ('Conversation-only recovery: project/Git reads withheld' if conversation_only else 'Vault-root session: broad project/Git reads withheld' if vault_session else 'Home-started session: home files/Git not scanned')} if home_session else git_state(repo)
         except (OSError, ValueError, subprocess.TimeoutExpired, host.Denied):
             git = {'branch': None, 'head': None, 'changes': None, 'limitation': 'Git observation unavailable; inspect local state before acting'}
         if git.get('changes') and len(git['changes']) > 4000:
@@ -525,7 +529,8 @@ def session_destination(state, snapshot, explicit=None, confirm=False):
 
 def session_cli(args, state):
     import sessions as history
-    access = history.Access(state, force_prompt=getattr(args, 'fresh_session_approval', False))
+    selected = getattr(args, 'widget_switch', False) and bool(getattr(args, 'session_id', None) or getattr(args, 'session_file', None))
+    access = history.Access(state, force_prompt=getattr(args, 'fresh_session_approval', False), selected=selected)
     if args.command == 'sessions' and args.action == 'revoke':
         access.revoke(); print('Session discovery/extraction approvals revoked. Original sessions untouched.'); return 0
     if args.command == 'sessions' and args.action == 'permissions':
@@ -572,7 +577,7 @@ def session_cli(args, state):
     source_key = str(Path(snapshot['root']) / snapshot['path'])
     evidence = {k: snapshot[k] for k in ('id', 'title', 'source', 'snapshot_sha256', 'byte_windows', 'partial', 'malformed_records', 'chain_gap', 'appended_during_read')}
     evidence.update(source_key=source_key, document=history.session_document(snapshot), conversation_only=getattr(args, "conversation_only", False), original_cwd=snapshot.get("cwd"), storage_path=source_key, repositories=getattr(args, "repo", []))
-    task = history.sanitize(args.task) or 'Continue the selected session’s latest unfinished user request using the accessible evidence; reconcile canonical instructions, current files and permissions before acting. Keep the original provider session intact.'
+    task = history.sanitize(args.task) or 'Reconstruct the selected session’s stopping point from the latest continuity checkpoint, recent human requests, follow-ups and tool-task evidence. Read the cited approved source and relevant canonical/current files before asking the user to repeat context. Verify which requested work is unfinished and continue it within existing permissions; preserve newer and unrelated work. If the requested work is already complete, report completion and any genuinely unresolved decisions instead of inventing a task. Ask only about gaps or approvals that remain after inspection. Keep the original provider session intact.'
     summary, packet = assemble(state, cwd, args.vault, task, session=evidence, target=args.provider)
     import continuity
     continuity.warn(continuity.Index(state).record(state.observation, args.source, 'selected_source_checkpoint', seed=True))
@@ -589,6 +594,13 @@ def session_cli(args, state):
 
 def launch_recovery(args, state, adapter, access, snapshot, cwd, task, evidence, summary, packet):
     if not sys.stdin.isatty() or not sys.stdout.isatty(): raise host.Denied('Launch requires a second interactive Terminal; original session stays open')
+    try:
+        with writer_reservation(state): pass
+    except host.Denied as error:
+        if getattr(args, 'widget_switch', False) and 'writer is active' in str(error):
+            import widget_switch
+            widget_switch.show_existing(Path(args.state_dir).expanduser() / 'continuation-writer.lock')
+        raise
     model = requested_model(select_provider(state, args.provider), getattr(args, 'model', None))
     print('Selected provider: ' + clean(model['label']) + '. Original session remains open. Host approvals still apply.', flush=True)
     state.settings = state.read('settings.json', {})
@@ -600,14 +612,20 @@ def launch_recovery(args, state, adapter, access, snapshot, cwd, task, evidence,
     review_summary(summary, evidence)
     print('COMPLETE FILTERED RECOVERY PACKET\n' + packet, flush=True)
     print('Outgoing evidence SHA-256: ' + hashlib.sha256(packet.encode()).hexdigest())
-    print('A detached or quota-limited source may still have a tool process writing or automatically resume when availability returns. Check background tools AND queued/automatic continuation. Skeptic cannot prove unmanaged process quiescence. If any agent may write this project, cancel and choose an existing isolated worktree with --cwd, or prepare a handoff only.')
-    if input('After checking the original Claude window and other project writers, type project-clear to continue: ').strip() != 'project-clear':
-        raise host.Denied('Project writer check declined; no provider launched')
-    while True:
-        answer = input('Type send to approve this exact outgoing packet, evidence to inspect it, or anything else to cancel: ').strip()
-        if answer == 'evidence': print(packet, flush=True); continue
-        if answer != 'send': raise host.Denied('Handoff sending declined')
-        break
+    if getattr(args, 'widget_switch', False):
+        import widget_switch
+        if not widget_switch.confirm(summary, evidence, model['label'], packet):
+            raise host.Denied('Switch cancelled; no provider launched')
+    else:
+        print('A detached or quota-limited source may still have a tool process writing or automatically resume when availability returns. Check background tools AND queued/automatic continuation. Skeptic cannot prove unmanaged process quiescence. If any agent may write this project, cancel and choose an existing isolated worktree with --cwd, or prepare a handoff only.')
+        approval = input('After checking the original Claude window and other project writers, type project-clear to continue: or project-clear send to confirm writer safety AND send this exact reviewed packet in one action; anything else cancels: ').strip()
+        if approval not in ('project-clear', 'project-clear send'):
+            raise host.Denied('Project writer check declined; no provider launched')
+        while approval != 'project-clear send':
+            answer = input('Type send to approve this exact outgoing packet, evidence to inspect it, or anything else to cancel: ').strip()
+            if answer == 'evidence': print(packet, flush=True); continue
+            if answer != 'send': raise host.Denied('Handoff sending declined')
+            break
     if adapter.verify(access, snapshot)['appended_bytes']: raise host.Denied('Source appended; refresh the review before launch')
     state.settings = state.read('settings.json', {})
     state.no_new_grants = True
@@ -625,7 +643,8 @@ def launch_recovery(args, state, adapter, access, snapshot, cwd, task, evidence,
     return code
 
 
-def tracked_launch(state, model, cwd, packet, vault, task):
+@contextmanager
+def writer_reservation(state):
     # Serialize CLI writers sharing the consent state; unmanaged writers still
     # require the explicit project-clear attestation, never inferred from quota.
     import fcntl
@@ -636,8 +655,13 @@ def tracked_launch(state, model, cwd, packet, vault, task):
             raise host.Denied('Unsafe continuation writer reservation')
         try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: raise host.Denied('Another Skeptic CLI writer is active; no provider launched')
-        return _tracked_launch(state, model, cwd, packet, vault, task)
+        yield
     finally: os.close(fd)
+
+
+def tracked_launch(state, model, cwd, packet, vault, task):
+    with writer_reservation(state):
+        return _tracked_launch(state, model, cwd, packet, vault, task)
 
 
 def _tracked_launch(state, model, cwd, packet, vault, task):
@@ -809,6 +833,7 @@ def main(argv=None):
     parser.add_argument('--continue', dest='continue_open', action='store_true', help='Open-session task confirmation then approved Codex launch; default for bare skeptic')
     parser.add_argument('--json', action='store_true', help='ready: machine-readable rows')
     parser.add_argument('--go', action='store_true', help='ready: run the best ready continuation now')
+    parser.add_argument('--widget-switch', action='store_true', help='One native confirmation combines writer check and outgoing handoff approval; existing scope grants still required')
     parser.add_argument('--fresh-session-approval', action='store_true', help='Ask again for metadata and selected-transcript consent even when a matching persistent grant exists')
     args = parser.parse_args(selected_argv)
     if args.command == 'ready': return ready_cli(args)

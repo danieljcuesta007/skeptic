@@ -74,10 +74,15 @@ class FrozenWorkflowTests(unittest.TestCase):
   class Terminal(io.StringIO):
    def isatty(self):return True
   terminal=Terminal()
-  with contextlib.redirect_stdout(terminal),patch('sys.stdin.isatty',return_value=True),patch.object(s,'providers',return_value=[model]),patch.object(s,'choose',side_effect=lambda title,*a,**k: 1 if title=='Continue your work' else 0),patch('builtins.input',side_effect=['project-clear','evidence','send']):
+  with contextlib.redirect_stdout(terminal),patch('sys.stdin.isatty',return_value=True),patch.object(s,'providers',return_value=[model]),patch.object(s,'choose',side_effect=lambda title,*a,**k: 1 if title=='Continue your work' else 0),patch('builtins.input',side_effect=getattr(self, 'approval_inputs', ['project-clear','evidence','send'])):
    result=s.main(['--id',ID,'--cwd',str(self.repo),'--session-root',str(self.storage),'--state-dir',str(self.root/'state'),'--vault',str(self.vault)])
   self.assertEqual(result,0);self.assertEqual(self.file.read_bytes(),before)
   data=json.loads(capture.read_text());self.assertEqual(data['cwd'],str(self.repo));self.assertIn('Continue the reply',data['prompt']);self.assertIn(data['prompt'],terminal.getvalue())
+
+class CombinedReviewTests(FrozenWorkflowTests):
+ def test_combined_writer_and_exact_packet_approval(self):
+  self.approval_inputs = ['project-clear send']
+  FrozenWorkflowTests.test_default_menu_recovery_launches_only_approved_fake(self)
 
 class RealRecoveryRegressionTests(unittest.TestCase):
  def test_attachment_bridge_and_last_work(self):
@@ -114,5 +119,59 @@ class RealRecoveryRegressionTests(unittest.TestCase):
   rows=[row('original',None,'user','Original objective'),row('latest','original','user','LATEST requested repair')]
   for n in range(100):rows.append(row('tool'+str(n),'latest' if n==0 else 'tool'+str(n-1),'assistant',[{'type':'tool_use','name':'Read','input':{}}]))
   self.assertTrue(document(extract(rows)).startswith('Latest recorded human request (completion unverified):\nLATEST requested repair'))
+
+
+class SeamlessContinuationTests(unittest.TestCase):
+ def test_compaction_is_not_missing_ancestry(self):
+  data=extract([row('u',None,'user','Recover days.'),row('a','u','assistant','Recovery shipped.'),row('boundary',None,'system',''),row('summary','boundary','user','Summary: Recovery shipped. Next: verify morning brief.',isCompactSummary=True)])
+  self.assertFalse(data['chain_gap'])
+  text=document(data)
+  self.assertIn('Latest continuity checkpoint (assistant summary, unverified)',text)
+  self.assertIn('verify morning brief',text)
+ def test_summary_tail_survives_packet_budget(self):
+  data=extract([row('u',None,'user','Old request '+('context '*700)),row('a','u','assistant','Completed '+('detail '*400)),row('b',None,'system',''),row('s','b','user','Earlier work '+('detail '*1500)+' NEXT: verify the morning brief.',isCompactSummary=True)])
+  text=document(data)
+  self.assertIn('NEXT: verify the morning brief.',text)
+  self.assertLessEqual(len(text.encode()),h.SESSION_TEXT_LIMIT)
+ def test_recent_followup_and_tool_pending_preserved(self):
+  data=extract([row('u',None,'user','Repair parser.'),row('c','u','user','continue'),row('a','c','assistant',[{'type':'tool_use','name':'TodoWrite','input':{'todos':[{'status':'in_progress','content':'Run parser regressions'}]}}])])
+  text=document(data)
+  self.assertIn('Run parser regressions',text)
+  self.assertIn('user-followup',text)
+ def test_actual_gap_after_compaction_stays_gap(self):
+  data=extract([row('s','missing','user','Summary: repair pending.',isCompactSummary=True)])
+  self.assertTrue(data['chain_gap'])
+
+ def test_compaction_boilerplate_never_reaches_receiver(self):
+  # Claude Code appends "continue without asking" instructions to every
+  # summary; historical text must never instruct the receiving agent.
+  summary=('This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n## Work\nRecovered days.\n### Still open / next\n- Verify the morning brief.\n\n'
+   'If you need specific details from before compaction (like exact code snippets), read the full transcript at: /x/y.jsonl\nContinue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary.\n\nThe messages after this summary are the most recent messages from before compaction, kept verbatim.')
+  text=document(extract([row('b',None,'system',''),row('s','b','user',summary,isCompactSummary=True)]))
+  self.assertIn('Verify the morning brief.',text)
+  for leaked in ('without asking the user','Resume directly','being continued from a previous','kept verbatim'):self.assertNotIn(leaked,text)
+ def test_requests_and_progress_outrank_tool_noise(self):
+  rows=[row('u',None,'user','Fix the keychain prompt.'),row('f','u','user','Also keep the old store backed up.'),row('p','f','assistant','Writing the fix in a separate worktree now.')]
+  prev='p'
+  for n in range(200):
+   rows.append(row('t'+str(n),prev,'assistant',[{'type':'tool_use','name':'Bash','input':{'command':'make'}}]));rows.append(row('r'+str(n),'t'+str(n),'user',[{'type':'tool_result','content':'ok'}]));prev='r'+str(n)
+  rows.append(row('e',prev,'assistant',[{'type':'tool_use','name':'Edit','input':{'file_path':'/approved/project/Keychain.swift'}}]))
+  rows.append(row('l','e','assistant','Tests pass. Next: install the build.'))
+  data=extract(rows);data['records']=h.extract_claude([(0,n+1,r) for n,r in enumerate(rows)],ID)['records']
+  text=document(data)
+  self.assertIn('Also keep the old store backed up.',text)
+  self.assertIn('Writing the fix in a separate worktree now.',text)
+  self.assertIn('/approved/project/Keychain.swift',text)
+  self.assertIn('Bash',text)
+  self.assertLessEqual(text.count('Raw tool result withheld'),2)
+ def test_evidence_listed_in_source_order(self):
+  rows=[row('u',None,'user','Repair parser.')]+[row('a'+str(n),'u' if n==0 else 'a'+str(n-1),'assistant','Step '+str(n)+' done.') for n in range(6)]
+  text=document(extract(rows))
+  positions=[text.index('Step '+str(n)+' done.') for n in range(5)]
+  self.assertEqual(positions,sorted(positions))
+
+ def test_packet_clipping_disclosed_without_missing_records(self):
+  data=extract([row('b',None,'system',''),row('s','b','user','Summary: '+('detail '*700),isCompactSummary=True)])
+  self.assertTrue(h.session_document(dict(data,updated='',partial=False))['truncated'])
 
 if __name__=='__main__':unittest.main()

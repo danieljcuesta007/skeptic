@@ -42,7 +42,7 @@ class VerdictTests(ClaudeFixture):
         row = self.collect()[0]
         self.assertEqual(row['activity'], 'idle'); self.assertEqual(row['verdict'], 'ready')
         self.assertEqual(row['project'], 'atlas'); self.assertEqual(row['task'], 'Ship Atlas')
-        self.assertEqual(row['continue_command'], ['skeptic', 'session', 'continue', '--project', str(self.home), '--id', self.sid, '--cwd', str(self.repo), '--with', 'codex'])
+        self.assertEqual(row['continue_command'], ['skeptic', 'session', 'continue', '--project', str(self.repo), '--id', self.sid, '--cwd', str(self.repo), '--with', 'codex', '--widget-switch'])
 
     def test_status_busy_means_wait(self):
         self.write_meta(status='busy')
@@ -59,6 +59,22 @@ class VerdictTests(ClaudeFixture):
         self.write_transcript(cwd=str(self.home))
         row = self.collect()[0]
         self.assertEqual(row['verdict'], 'needs_project'); self.assertIsNone(row['continue_command'])
+
+    def test_home_without_repository_continues_from_notes_vault(self):
+        # A finished multi-repo session (its worktree since removed) stays
+        # switchable: the notes vault is the bounded destination.
+        vault = self.home / 'brain'; (vault / '.git').mkdir(parents=True)
+        self.write_transcript(cwd=str(self.home / 'removed-worktree'))
+        row = self.collect()[0]
+        self.assertEqual(row['verdict'], 'ready')
+        self.assertEqual(row['continue_command'], ['skeptic', 'session', 'continue', '--project', str(vault), '--id', self.sid, '--cwd', str(vault), '--with', 'codex', '--widget-switch'])
+        self.assertIn('notes', row['project']); self.assertIn('notes', row['note'])
+
+    def test_busy_home_session_still_waits_with_vault(self):
+        (self.home / 'brain' / '.git').mkdir(parents=True)
+        self.write_meta(status='busy'); self.write_transcript(cwd=str(self.home))
+        row = self.collect()[0]
+        self.assertEqual(row['verdict'], 'wait'); self.assertIsNone(row['continue_command'])
 
     def test_start_time_within_tolerance_but_pid_reuse_refused(self):
         self.started = 1000.0; self.assertEqual(self.collect()[0]['association'], 'native Claude session record (PID + start time)')

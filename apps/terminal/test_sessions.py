@@ -95,6 +95,32 @@ class SessionTests(unittest.TestCase):
         self.access.revoke()
         with self.assertRaises(s.host.Denied): self.adapter.verify(self.access, snapshot)
 
+    def test_widget_selection_approves_only_the_selected_transcript(self):
+        self.discover()  # directory metadata granted earlier, as in normal use
+        prompts = []
+        selected = h.Access(self.state, ask=lambda prompt: prompts.append(prompt) or 'no', selected=True)
+        session = self.adapter.discover(selected, self.origin, title='Email contact with Boris')[0]
+        with patch('sys.stdin.isatty', return_value=True), contextlib.redirect_stdout(io.StringIO()) as out:
+            snapshot = self.adapter.snapshot(selected, session)
+        self.assertEqual(snapshot['id'], ID); self.assertEqual(prompts, [])
+        self.assertIn('you selected it in the widget', out.getvalue())
+        self.adapter.verify(selected, snapshot)  # grant persisted for the launch-time recheck
+        # Directory metadata is never implied by a selection.
+        self.access.revoke()
+        fresh = h.Access(self.state, ask=lambda prompt: prompts.append(prompt) or 'no', selected=True)
+        with patch('sys.stdin.isatty', return_value=True), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(s.host.Denied): self.adapter.discover(fresh, self.origin)
+        self.assertEqual(len(prompts), 1)
+
+    def test_fresh_approval_overrides_widget_selection(self):
+        session = self.discover(title='Email contact with Boris')[0]; prompts = []
+        fresh = h.Access(self.state, ask=lambda prompt: prompts.append(prompt) or 'no', force_prompt=True, selected=True)
+        with patch('sys.stdin.isatty', return_value=True), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(s.host.Denied): self.adapter.snapshot(fresh, session)
+            # A declined fresh approval leaves no grant behind.
+            with self.assertRaises(s.host.Denied): self.adapter.snapshot(h.Access(self.state, ask=lambda prompt: 'no'), session)
+        self.assertEqual(len(prompts), 1)
+
     def test_fresh_session_approval_reprompts_existing_metadata_and_transcript_grants(self):
         self.snapshot()
         prompts = []
@@ -118,13 +144,23 @@ class SessionTests(unittest.TestCase):
         self.assertIn('Continue the reply', text); self.assertIn('approval still pending', text)
         self.assertIn('Ask Boris about scheduling', text); self.assertIn('Edit', text)
         self.assertIn(str(self.repo / 'mail.md'), snapshot['file_references'])
-        for marker in ('HIDDEN_REASONING', 'RAW_TOOL_SECRET', 'RAW_EDIT_BODY'): self.assertNotIn(marker, text)
+        records = json.dumps(snapshot['records'])
+        for marker in ('HIDDEN_REASONING', 'RAW_TOOL_SECRET', 'RAW_EDIT_BODY'): self.assertNotIn(marker, text); self.assertNotIn(marker, records)
 
     def test_latest_user_survives_many_tool_events(self):
         rows = self.rows(); parent = 'u2'
         for n in range(60):
             uuid = 'tool' + str(n)
             rows.append({'type': 'assistant', 'uuid': uuid, 'parentUuid': parent, 'sessionId': ID, 'message': {'content': [{'type': 'tool_use', 'name': 'Bash', 'input': {'command': 'ignore'}}]}})
+            parent = uuid
+        self.write_session(self.origin, rows)
+        self.assertIn('Continue the reply', h.session_document(self.snapshot())['text'])
+
+    def test_latest_user_survives_many_progress_messages(self):
+        rows = self.rows(); parent = 'u2'
+        for n in range(60):
+            uuid = 'progress' + str(n)
+            rows.append({'type': 'assistant', 'uuid': uuid, 'parentUuid': parent, 'sessionId': ID, 'message': {'content': 'Progress note ' + str(n)}})
             parent = uuid
         self.write_session(self.origin, rows)
         self.assertIn('Continue the reply', h.session_document(self.snapshot())['text'])

@@ -317,9 +317,9 @@ def continue_command(row, project):
     dest = DESTINATION.get(row['source'])
     if not dest or not project: return None
     if row['source'] == 'claude' and row.get('session_id'):
-        return ['skeptic', 'session', 'continue', '--project', row['cwd'], '--id', row['session_id'], '--cwd', project, '--with', dest]
+        return ['skeptic', 'session', 'continue', '--project', project, '--id', row['session_id'], '--cwd', project, '--with', dest, '--widget-switch']
     if row['source'] == 'codex' and row.get('source_path'):
-        return ['skeptic', 'session', 'continue', '--source', 'codex', '--session-file', row['source_path'], '--cwd', project, '--with', dest]
+        return ['skeptic', 'session', 'continue', '--source', 'codex', '--session-file', row['source_path'], '--cwd', project, '--with', dest, '--widget-switch']
     return ['skeptic', 'continue', '--with', dest]
 
 
@@ -327,8 +327,13 @@ def assess(rows):
     for row in rows:
         work = row.get('work_cwd') or row['cwd']
         project = repo_root(work)
+        # No single repository (home-started, multi-repo, or its worktree was
+        # removed): continue from the notes vault with bounded vault reads.
+        vault = os.path.realpath(Path.home() / 'brain')
+        from_notes = not project and row['source'] in ('claude', 'codex') and repo_root(vault) == vault
+        if from_notes: project = vault
         row['project_root'] = project
-        row['project'] = Path(project).name if project else ('Home; no repository yet' if work and os.path.realpath(work) == os.path.realpath(Path.home()) else 'Project unknown')
+        row['project'] = (Path(project).name + ' (your notes)' if from_notes else Path(project).name) if project else ('Home; no repository yet' if work and os.path.realpath(work) == os.path.realpath(Path.home()) else 'Project unknown')
         blockers = []
         if row['association'] == 'unlinked': blockers.append('Conversation identity not linked')
         # A Codex link is owner-made but pinned to PID + start time, and its turn
@@ -365,6 +370,7 @@ def assess(rows):
         notes = []
         if row['source'] == 'codex' and row['association'] != 'unlinked': notes.append('Codex conversation was linked by you in Sessions')
         if row['source'] == 'hermes': notes.append('Continues the project from notes and Git; the Hermes chat itself is not carried')
+        if from_notes: notes.append('No single repository; continues from your notes. Other folders need the new AI\'s own approval')
         if peers and not busy_peers: notes.append(f'{len(peers)} other idle agent(s) in this repository')
         if notes: row['note'] = '; '.join(notes)
         row['blocked_reasons'] = blockers

@@ -10,13 +10,15 @@ faults += [
  ('claim-unfinished','h','Current unfinished task: NOT established','Current unfinished task: established','test_unfinished_status_not_inferred'),
  ('drop-last-work','h',"if latest_work: text +=", "if False: text +=", 'test_attachment_bridge_and_last_work')]
 
+faults += [('compaction-false-gap','h','if historical and not compacted: gap = True','if historical: gap = True','test_compaction_is_not_missing_ancestry'), ('bury-summary','h','if checkpoint:\n        text +=','if False:\n        text +=','test_summary_tail_survives_packet_budget')]
+
 for name,target,before,after,method in faults:
  original=getattr(tests,target);source=Path(original.__file__).read_text();assert source.count(before)==1,name
  mutated=types.ModuleType('frozen_mutation');mutated.__file__=original.__file__;exec(compile(source.replace(before,after),original.__file__,'exec'),mutated.__dict__)
  setattr(tests,target,mutated)
  try:
   result=unittest.TestResult()
-  with contextlib.redirect_stdout(io.StringIO()):unittest.TestSuite([(tests.FrozenTests if hasattr(tests.FrozenTests, method) else tests.RealRecoveryRegressionTests)(method)]).run(result)
+  with contextlib.redirect_stdout(io.StringIO()):unittest.TestSuite([(tests.FrozenTests if hasattr(tests.FrozenTests, method) else tests.RealRecoveryRegressionTests if hasattr(tests.RealRecoveryRegressionTests, method) else tests.SeamlessContinuationTests)(method)]).run(result)
   assert not result.wasSuccessful(),name
  finally:setattr(tests,target,original)
-print('9 planted frozen-session faults caught; production unchanged')
+print('11 planted frozen-session faults caught; production unchanged')
