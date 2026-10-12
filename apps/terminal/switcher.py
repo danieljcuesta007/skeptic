@@ -712,6 +712,16 @@ def live_rows():
 MARKS = {'ready': 'Ready', 'wait': 'Wait ', 'needs_project': 'Needs', 'unknown': '  ?  '}
 
 
+# The hood (docs/brand), drawn for the terminal.
+BANNER = """\
+     ▄█▄
+    ▟█▀█▙
+   ▐█▘ ▝█▌
+   ██▖ ▗██
+  ▟███████▙
+"""
+
+
 def ordered(rows):
     """Terminal-tab order, so numbers match the widget and named tabs."""
     return sorted(rows, key=lambda r: r.get('tty', ''))
@@ -807,6 +817,7 @@ def main(argv=None):
         state = State(args.state_dir)
         if args.command == 'switch':
             args.interactive_switch = True
+            print(BANNER if sys.stdout.isatty() else '', end='')
             print('SKEPTIC — Your work. Your memory. Any AI.')
             workflow = choose('Continue your work', ['Switch one of my open sessions to another AI', 'Recover a Claude session (local, consent required)', 'Continue this project from approved notes and Git'])
             if workflow == 0:
