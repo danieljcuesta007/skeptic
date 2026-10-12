@@ -1,6 +1,8 @@
 # Step 43B — Monochrome brand & unified workspace acceptance
 
-**Upgrade not yet accepted in a real browser.** Daniel confirmed the original MVP
+**12 Oct 2026:** `network_smoke.py` PASSES on a real loopback socket (launch, workspace approvals, inventory, repository association, grounded detail, both prompts, origin/traversal refusal, project removal, root revocation). Automated *visual* acceptance is not possible: the Chrome extension's navigation arrives as `Sec-Fetch-Site: cross-site`, which the app correctly refuses. The visual checklist below is Daniel's (type the address yourself).
+
+**Earlier:** Upgrade not yet accepted in a real browser. Daniel confirmed the original MVP
 browser/dashboard and original socket smoke. Current agent socket bind is denied;
 browser selection reports no browser and discovery is empty. Handler tests are not
 live/browser evidence. Step 43A acceptance and Cloudflare launch remain separate.
