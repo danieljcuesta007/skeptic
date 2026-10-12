@@ -38,6 +38,7 @@ faults = [
  ('hide-untracked-file-changes', 'engine', "'--untracked-files=all'", "'--untracked-files=normal'", 'test_untracked_directory_file_changes_detected'),
  ('send-explicit-task-secret', 'engine', 'task = filtered_task', 'task = task', 'test_explicit_task_secret_omitted'),
  ('send-without-review', 'session', "if answer != 'send':", 'if False:', 'test_session_sending_requires_review'),
+    ('hide-complete-recovery-packet', 'session', "    print('COMPLETE FILTERED RECOVERY PACKET\\n' + packet, flush=True)", '    pass', 'test_declined_send_displays_packet_without_launch_or_persistence'),
  ('send-changed-context', 'session', 'if refreshed != packet:', 'if False:', 'test_context_changed_during_review_requires_new_review'),
 ]
 sources = {'index': Path(continuity.__file__).read_text(), 'engine': Path(switcher.__file__).read_text(), 'session': Path(switcher.__file__).read_text()}

@@ -153,3 +153,22 @@ proposal's statement that no engine exists. Production state migration, global c
 real adapters, canonical-context integration and Swift terminal remain proposals.
 Per-session engine workers share one protocol/registry implementation. Supervisor death
 still prevents live reattachment. No services or global permissions were installed.
+
+
+## Step 44 implementation update
+
+The master directive authorizes engineering beyond the historical fake-only stop gate.
+An isolated implementation extends the same registry/protocol with durable startup receipts,
+logical session lineage, versioned additive integration schema, switch journal, per-project
+locks and current/selected/all CLI scopes. Existing recovery assembly and continuity
+fingerprints supply packets; no parallel semantic-memory system is introduced.
+Claude/Codex launch contracts are inspected but live lifecycle is unverified. Native recovery
+can be acknowledged only by an operator after inspecting actual bounded destination PTY output
+and the exact checkpoint; provider-native semantic proof is unsupported. Active/detached/
+suspended sources are excluded. Eligible sources must exit, drain PTY output and have no
+remaining owned process-group members. Escaped descendants and unmanaged writers remain beyond
+this proof. Production migration/rollback are unimplemented because the legacy production state
+contains CLI grants/mappings, not managed PTY sessions, and must not be silently imported.
+The owner-reported prior full validator passes in ordinary Mac Terminal; this sandbox still
+blocks rerunning the socket suite. See
+[implementation and limits](../../apps/terminal/MANAGED.md); earlier 43H evidence is historical.

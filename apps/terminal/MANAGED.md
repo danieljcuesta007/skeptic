@@ -1,3 +1,226 @@
+# Step 44 — Managed multi-session integration and recovery hardening
+
+Engineering implementation in an isolated worktree. **Not ready for production acceptance.**
+New code remains restricted to explicitly selected temporary projects and state. There is no
+production registry/grant migration, existing-process adoption, installer activation or service.
+Earlier Step 43H results below are historical; they do not validate this changed engine.
+
+## Prerequisites and provider contracts
+
+Python 3.9+, Unix PTYs/local Unix sockets; Node/npm for the existing full builds.
+Native Claude/Codex installation and authentication remain user-owned. No downloads,
+credential inspection, authentication changes or permission bypasses are performed.
+The inspected launch contracts are Claude Code **2.1.296** and Codex CLI **0.162.0**;
+other versions fail closed until their interface is inspected. Installed `--help`/`--version`
+and [Claude CLI reference](https://code.claude.com/docs/en/cli-reference) and
+[OpenAI CLI reference](https://developers.openai.com/codex/cli/reference) informed the plans.
+These versions are contract-inspected, **not live-provider acceptance-tested**.
+
+Claude requests an explicit native UUID; native confirmation is unverified. Codex interactive
+launch cannot assign/extract a verified native session ID here; it is recorded as unknown.
+Codex uses `--no-daemon --cd PROJECT` to avoid sharing the existing user-session server.
+Both launch with explicit argv, no shell, option boundary before the prompt, native approvals
+and config. Native config/hooks can affect behavior. Documented native conversation resume
+exists, but managed resume is unsupported. Safe quiescence, native checkpoint/recovery
+provider-native recovery proof, process adoption and supervisor-restart reconnection are
+unsupported. The CLI offers an explicit operator review/acknowledgement after actual destination
+PTY output is captured; it records a human attestation, not a model-authored proof.
+
+## Development commands
+
+Use this checkout's `apps/terminal/switcher.py` with Python, or an already-installed
+launcher deliberately pointing to it. No launcher was installed or repointed by this work.
+Create a private temporary directory and separate project directories. Example variables:
+
+```sh
+fixture=$(mktemp -d /private/tmp/sk-demo-XXXXXX)
+mkdir "$fixture/project"
+python3 -B apps/terminal/switcher.py managed initialize --state "$fixture/state"
+python3 -B apps/terminal/switcher.py managed start --state "$fixture/state" --cwd "$fixture/project" --name 'Daily Brief'
+```
+
+Default provider is the fixed echo fixture. To launch a newly managed native session, add
+`--provider claude` or `--provider codex` and **explicitly** add `--approve-provider`.
+That flag authorizes native quota usage and access to the selected project under native
+security settings. Do not add it to an automated test without the required live-test approval.
+`managed providers --state TEMP/state` inspects versions/capabilities without model calls.
+
+Start prints the session UUID and attaches in an interactive terminal. Ctrl+] detaches;
+`managed attach --state TEMP/state --id UUID` reconnects while its supervisor survives.
+`--observe` cannot write; `--cursor N` requests bounded output replay. Exact screen/alternate
+screen restoration is unsupported. Detach immediately abandons all unacknowledged pending
+bytes plus non-escape bytes in the current input chunk, reports their count and never replays
+these bytes. A failed input acknowledgement reports delivery uncertainty; users must inspect
+before retyping. EOF also detaches. Partial writes retry only acknowledged-unsent bytes.
+
+`managed status`/`managed list` and transaction inspection use read-only SQLite connections;
+missing/corrupt storage produces an error without initialization or repair. `initialize` is
+an explicit additive integration-schema operation in temporary state only. No existing
+production database is touched. Unknown integration versions are refused without migration.
+
+`managed start --id UUID` gives a caller-selected startup identity. Durable owner-only intent
+precedes spawn. Retries with the same identity reconcile a reachable supervisor; unresolved
+receipts refuse another launch and report the UUID. A crash between intent and spawn can
+require manual investigation: automatic relaunch is deliberately refused. Different project,
+provider or packet under the same identity is refused. Requested native ID/version persist
+in the startup receipt. SQLite records supervisor/agent/generation/project identities.
+
+## Three switching scopes
+
+```sh
+python3 -B apps/terminal/switcher.py switch codex --state TEMP/state --id SOURCE_UUID --task 'Latest user objective'
+python3 -B apps/terminal/switcher.py switch --select codex --state TEMP/state --task 'Prompt for each objective'
+python3 -B apps/terminal/switcher.py switch --all codex --state TEMP/state --task 'Prompt for each objective'
+```
+
+`SKEPTIC_MANAGED_STATE` and `SKEPTIC_SESSION_ID` provide explicit current-session identity
+inside a newly managed provider's tool environment. A parent shell after detach does not
+inherit that environment: supply `--state` and `--id`. Skeptic never guesses from PID/TTY.
+Bare legacy `skeptic` and `switch --with PROVIDER` retain the existing unmanaged workflow.
+
+The picker lists all sessions in the selected managed registry, their name/project/provider,
+terminal status, destination, eligibility/exclusion and checkpoint readiness. It accepts comma
+separated row numbers. Batch switching asks separately for each latest user objective.
+It does not reuse one project's task for another or scan private provider histories.
+Unmanaged processes are not discovered/adopted; they require the existing consent-gated
+recovery workflow. `--all` means eligible entries in this explicit managed registry.
+
+**Only observed exited sources are currently eligible.** Active, detached, suspended,
+unreachable, already-destination and overlapping live-writer sessions are excluded. The
+supervisor also requires its PTY output drain to finish and the child process group to disappear.
+This catches children that remain in the managed group. A provider descendant that creates a new
+session/process group cannot be proven quiescent by this check; the preflight still requires
+explicit confirmation about other writers, and unmanaged agents remain outside Skeptic's control.
+This does **not** automatically pause or switch a live quota-blocked source.
+
+The quiescence signal is deliberately narrow: it requires observed agent exit, complete PTY drain,
+and no remaining process in the managed agent's original process group. It cannot discover a child
+that called `setsid`/changed process group, an already reparented descendant, or an unmanaged writer.
+No platform-independent process-tree proof is claimed. The switch preflight's operator confirmation
+about other writers is not a guarantee about escaped descendants. If those cannot be ruled out,
+defer switching. Active, detached, suspended, unreachable and ambiguous sessions remain excluded.
+Project locks coordinate Skeptic's managed launches and switch transactions only; they cannot stop
+arbitrary filesystem writes.
+
+The user types `preflight`, approves existing project/vault read scopes through the existing
+switcher, inspects each exact bounded packet and types `send` per destination. Packet
+preparation uses existing `assemble`/grounded-packet/privacy/continuity logic. Source excerpts
+and tool output remain untrusted evidence; only the explicit user objective is an instruction.
+No raw PTY bytes or private conversation histories are copied. Completion/pending-work claims
+remain attributed, potentially incomplete documentation rather than invented working memory.
+`--vault` and `--permissions-state` can select synthetic scope/state for testing.
+
+Each packet has immutable transaction identity, owner-only file and SHA-256 binding to source,
+destination and objective. Grants, source fingerprints, project identity, Git observations
+and packet content are refreshed immediately before native launch; changed/revoked evidence
+blocks delivery. Same-user tampering and the final filesystem race are not eliminated.
+Packets/startup receipts contain approved context: keep this temporary state private and
+out of Git. Native prompts may be visible in same-user process inspection and provider storage.
+No automatic commits, stash, reset, worktree rewriting, publication or remote writes occur.
+
+## Journal, concurrency and recovery
+
+The existing registry stores schema version, display metadata, stable logical lineage,
+checkpoints, pending transactions, recovery metadata, events and project locks. Physical
+source/target IDs differ; the logical Skeptic identity continues across targets. Runtime
+writer/observer metadata comes from the owning supervisor, not PID inference.
+
+Separate source/project locks and serialized durable launch intent prevent duplicate
+automatic launch. Canonical path overlap includes nested project roots. A destination's project
+reservation remains after recovery acknowledgement because it may still write. Locks coordinate
+these managed operations; they cannot control unmanaged tools or guarantee filesystem
+exclusivity. Native fresh launches also refuse overlapping live/unresolved managed receipts.
+Existing Git worktrees are preserved; the existing Git reader may report linked metadata as
+unknown rather than expanding permissions into another checkout.
+Release a target's reservation only after that managed target exits, drains output, and its owned
+process group is absent: `managed release --state STATE --id TARGET_UUID`. This preserves the
+transaction/evidence history and refuses while any overlapping managed writer remains.
+
+Stages record discovered/eligible/locked/checkpointing/checkpoint validated/authorized/
+launching/started/recovery verifying. Sources are never terminated by switching.
+`managed transactions --state TEMP/state` lists transaction/source/target/stage/error.
+`managed reconcile --state TEMP/state --id TRANSACTION_UUID` can verify a reachable target's
+identity after interrupted launch and restore **recovery verifying**, not recovery success.
+`managed revoke --state TEMP/state --id TRANSACTION_UUID` revokes future launch authorization.
+Revocation cannot retract delivered data or stop an independently running target; a potentially
+launched target retains its project lock. A partial batch failure retains its evidence/intent
+and does not prevent independent projects from proceeding. Never remove a lock or retry with
+a new identity until the original target and all potential writers have been investigated.
+
+Native launch reports `recovery_verifying`; process startup alone never means recovery success.
+After attaching or reconnecting to the destination, run
+`managed acknowledge --state STATE --id DESTINATION_UUID --transaction TRANSACTION_UUID`.
+The command verifies reachable session/provider/project identity, captures the current bounded
+PTY output from cursor zero without gaps, escapes terminal control bytes, and shows both that
+output and the exact checkpoint. The operator must enter the exact destination/session/project/
+objective/checkpoint/provider values and state the pending item they observed. The immutable
+acknowledgement record hashes the output and binds it to the reviewed checkpoint. This is
+**operator-verified recovery**, not automated semantic verification or proof that the provider
+retained all context. Missing output, gaps, changed identity/evidence, revoked authorization or
+wrong answers leave the transaction in `recovery_verifying`. An echo fixture has no recovery
+adapter and is refused before provider spawn. Source retirement and rollback that relaunches an
+uncertain target are unsupported. No native-provider acknowledgement has been run in this
+workspace.
+
+## Migration boundary
+
+`managed_migration.py` is a rehearsal utility for synthetic registries created under temporary
+directories. Its tests review a content-hashed plan, copy only an exited schema-v1 registry and
+owner-only metadata into a new destination, retain the source, and roll back by moving the
+unchanged destination to a uniquely named archive. Changed plans, active/owned sessions, extra
+destination files, and altered copied files are refused; partial copies remain marked for manual
+inspection. Three planted migration faults are caught. This is not a production migration tool:
+there is no supported production registry root/schema or managed-session inventory, and no legacy
+permissions or grants are imported. It never reads `~/.skeptic-cli`; production migration and
+rollback remain disabled pending a separately reviewed schema and backup/restore plan.
+
+## Verification and remaining acceptance
+
+New hardening/provider/journal/CLI and synthetic migration tests are included in
+`python3 -B tests/validate.py`. Daniel reports that the full validator passed in ordinary Mac
+Terminal on the pre-continuation snapshot: **344 tests, 240 planted faults and both builds**. That
+owner-reported run included the then-current recovery acknowledgement, owned process-group
+quiescence and gated project-lock release, but predates the migration rehearsal and new three-PTY
+acceptance test below.
+
+On current code, `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate.py
+--without-managed-runtime` passed **350 tests and 243 planted faults**, plus website/local builds.
+The validator explicitly skipped `test_managed.py` and `mutation_managed.py`, so this is partial
+validation. The previous test failure came from a 104-byte Darwin socket path produced by its long
+temporary prefix. The fixture now uses a short prefix and asserts the socket fits; `managed_cli.start`
+preflights this path before creating registry state or spawning. A regression confirms overlong paths
+are refused without registry creation or spawn. The focused PTY test was retried, but the tool
+sandbox denies AF_UNIX binding; no leftover Step 44 supervisor remained. It must pass in ordinary
+Mac Terminal before claiming current-code full PTY acceptance.
+
+Daniel's latest ordinary Mac Terminal full-validator attempt stopped at that three-session test
+after its 51-test focused integration/migration group passed. The corrected code has not yet had a
+full ordinary-Terminal run; no downstream results are inferred from the stopped run.
+
+Socket-independent validation exercises three separate Daily Brief/Website/Research projects,
+current/selected/all scopes, independent objectives, third-project preservation, partial
+failure, exclusion reporting, changed evidence/revoked grants, no duplicates, receipt mismatches
+and source retention. Launch boundaries and observations are synthetic; these are **not**
+three live managed/provider sessions. `test_managed.ThreeSessionPTYAcceptance` adds the actual
+three-agent managed-PTY scenario and synthetic destination-context echo check; it has not passed
+in this sandbox. Neither synthetic path proves Claude/Codex context recovery.
+Explicit partial validation command: `python3 -B tests/validate.py --without-managed-runtime`.
+It prints both excluded commands and a partial-acceptance result; default validation still
+requires them. Both website/local builds and independent existing suites were run. No real model requests.
+
+Still required: rerun the full changed-engine PTY/fault validator in ordinary Mac Terminal;
+newly owned Claude and Codex live tests with explicit bounded quota approval; a safe policy for
+escaped provider descendants (currently not provable); a separately reviewed production
+migration/rollback (currently disabled); native-provider three-session acceptance. Synthetic
+three-project coverage is verified at
+the journal/CLI boundary, not live PTYs or real providers. Supervisor
+failure/reboot survival, full shell Ctrl+Z, Swift integration, exact VT restoration and
+existing-process adoption remain unverified or unsupported.
+
+---
+
+## Historical Step 43H evidence
+
 # Step 43H — Shared fake-agent terminal engine
 
 Implemented first slice, 2026-10-09. Product: Your work. Your memory. Any AI. Any interface.

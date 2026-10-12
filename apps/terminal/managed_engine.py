@@ -1,4 +1,4 @@
-"""Fake-only local PTY engine. No provider, transcript, vault or production-state access."""
+"""Local PTY engine for explicit temporary fixtures; no adoption or production migration."""
 import base64
 import ctypes
 import fcntl
@@ -28,6 +28,7 @@ class Denied(Exception):
 
 def fixture_path(value):
     path = Path(value).absolute()
+    if '..' in path.parts: raise Denied('Fixture traversal refused')
     allowed = [Path('/private/tmp'), Path('/tmp'), Path(tempfile.gettempdir()), Path(tempfile.gettempdir()).resolve()]
     if not any(path != root and root in path.parents for root in allowed):
         raise Denied('This slice requires an isolated temporary fixture directory')
@@ -40,8 +41,8 @@ def fixture_path(value):
     return path
 
 
-def private_file(path, create=False):
-    fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | (os.O_CREAT if create else 0), 0o600)
+def private_file(path, create=False, readonly=False):
+    fd = os.open(path, (os.O_RDONLY if readonly else os.O_RDWR) | os.O_NOFOLLOW | (os.O_CREAT if create else 0), 0o600)
     info = os.fstat(fd)
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
         os.close(fd); raise Denied('Unsafe private state file')
@@ -49,8 +50,15 @@ def private_file(path, create=False):
 
 
 class Registry:
-    def __init__(self, root):
+    def __init__(self, root, readonly=False):
         self.root = fixture_path(root)
+        if readonly:
+            info = self.root.stat()
+            if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700: raise Denied('State must be owner-only')
+            fd = private_file(self.root / 'registry.sqlite', readonly=True); os.close(fd)
+            self.db = sqlite3.connect((self.root / 'registry.sqlite').as_uri() + '?mode=ro', uri=True, timeout=2)
+            self.db.execute('PRAGMA query_only=ON')
+            return
         self.root.mkdir(mode=0o700, exist_ok=True)
         info = self.root.stat()
         if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700: raise Denied('State must be owner-only')
@@ -101,6 +109,35 @@ def frame(value):
     return struct.pack('!I', len(body)) + body
 
 
+def decode_request(raw):
+    if len(raw) > FRAME_LIMIT: raise Denied('Frame too large')
+    depth = 0; quoted = False; escaped = False
+    for char in raw:
+        if quoted:
+            if escaped: escaped = False
+            elif char == 92: escaped = True
+            elif char == 34: quoted = False
+        elif char == 34: quoted = True
+        elif char in (91, 123):
+            depth += 1
+            if depth > 32: raise Denied('JSON nesting limit exceeded')
+        elif char in (93, 125): depth -= 1
+    try: request = json.loads(raw)
+    except (ValueError, RecursionError) as error: raise Denied('Malformed JSON') from error
+    if not isinstance(request, dict): raise Denied('Invalid request')
+    return request
+
+
+def sequence(state, message):
+    number = message.get('id')
+    if type(number) is not int or number <= state['last_id'] or number > 9007199254740991: raise Denied('Request IDs must increase')
+    state['last_id'] = number
+    if message.get('op') == 'hello':
+        if state['hello']: raise Denied('Already authenticated')
+        state['hello'] = True
+    elif not state['hello']: raise Denied('hello required')
+
+
 def peer_uid(connection):
     if sys.platform == 'darwin':
         uid, gid = ctypes.c_uint(), ctypes.c_uint()
@@ -111,10 +148,26 @@ def peer_uid(connection):
     raise Denied('Peer authentication unsupported')
 
 
+def process_group_clear(pgid):
+    """True only when the explicitly owned PTY process group is absent.
+
+    Detached and SIGSTOPped agents still exist and therefore remain writers from
+    the project's point of view. Errors and permission ambiguity fail closed.
+    """
+    if type(pgid) is not int or pgid <= 1: return False
+    try:
+        os.killpg(pgid, 0)
+        return False
+    except ProcessLookupError:
+        return True
+    except (PermissionError, OSError):
+        return False
+
+
 class Client:
     def __init__(self, root, sid):
         self.root, self.sid = Path(root), session_id(sid)
-        registry = Registry(root)
+        registry = Registry(root, readonly=True)
         try: self.metadata = registry.get(sid)
         finally: registry.close()
         fd = private_file(self.root / (sid + '.key'))
@@ -131,7 +184,6 @@ class Client:
             self.request('hello')
         except BaseException:
             self.socket.close(); raise
-        self.number = 0
 
     def request(self, op, **values):
         number = getattr(self, 'number', 0) + 1; self.number = number
@@ -154,9 +206,17 @@ class Client:
 
 
 def observation(root, sid):
-    registry = Registry(root)
+    registry = Registry(root, readonly=True)
     try: row = registry.get(sid)
     finally: registry.close()
+    try:
+        fd = private_file(Path(root) / (sid + '.startup'), readonly=True)
+        try: receipt = json.loads(os.read(fd,300001))
+        finally: os.close(fd)
+        if receipt.get('session') != sid or receipt.get('cwd') != row['cwd']: raise Denied('Startup receipt identity mismatch')
+        row['requested_native_id'] = receipt.get('native_id')
+        row['provider_version'] = receipt.get('version')
+    except FileNotFoundError: pass
     try:
         client = Client(root, sid)
         try: return client.request('status')
@@ -170,7 +230,7 @@ def observation(root, sid):
         return row
 
 
-def supervise(root, sid, cwd):
+def supervise(root, sid, cwd, provider="skeptic-fake-v1", approved=False):
     os.umask(0o077)
     registry = Registry(root)
     generation = str(uuid.uuid4())
@@ -188,20 +248,33 @@ def supervise(root, sid, cwd):
     recorded = registry.get(sid)
     if (cwd_info.st_dev, cwd_info.st_ino) != (recorded['dev'], recorded['ino']): raise Denied('Working directory identity changed before launch')
     fake_argv = [sys.executable, '-B', str(Path(__file__).with_name('managed_fake.py'))]
+    child_env = {'PATH': os.defpath, 'PYTHONUNBUFFERED': '1', 'SKEPTIC_SESSION_ID': sid, 'SKEPTIC_MANAGED_STATE': str(root)}
+    if provider != 'skeptic-fake-v1':
+        from managed_providers import plan
+        fd = private_file(registry.root / (sid + '.startup'))
+        try: receipt = json.loads(os.read(fd,300001))
+        finally: os.close(fd)
+        if receipt.get('session') != sid or receipt.get('provider') != provider or receipt.get('cwd') != str(cwd): raise Denied('Launch receipt mismatch')
+        launch = plan(provider, cwd, prompt=receipt.get('packet',''), native_id=receipt.get('native_id'), approved=approved)
+        fake_argv = launch['argv']
+        child_env = dict(os.environ, SKEPTIC_SESSION_ID=sid, SKEPTIC_MANAGED_STATE=str(root))
+        with registry.db:
+            registry.db.execute('UPDATE sessions SET provider=? WHERE id=?', (provider, sid))
     pid, master = pty.fork()
     if pid == 0:
         try:
             os.fchdir(cwd_fd)
             os.closerange(3, 256)
-            os.execve(sys.executable, fake_argv, {'PATH': os.defpath, 'PYTHONUNBUFFERED': '1'})
+            os.execve(fake_argv[0], fake_argv, child_env)
         except BaseException as error:
-            os.write(2, ('Fake launch failed: ' + type(error).__name__ + ': ' + str(error) + '\n').encode())
+            os.write(2, ('Agent launch failed: ' + type(error).__name__ + ': ' + str(error) + '\n').encode())
             os._exit(2)
     os.close(cwd_fd)
     registry.update(sid, agent=pid, status='detached')
     os.set_blocking(master, False)
     clients, writer, output, start, end = {}, None, bytearray(), 0, 0
     live, suspended, code, draining = True, False, None, True
+    native_id = launch['native_id'] if provider != 'skeptic-fake-v1' else None
     def update_status():
         registry.update(sid, status='suspended' if suspended else ('live' if writer is not None else 'detached') if live else 'exited', exit_code=code)
     def disconnect(connection):
@@ -211,15 +284,19 @@ def supervise(root, sid, cwd):
     def dispatch(connection, message):
         nonlocal writer, live
         if message.get('v') != VERSION or message.get('key') != key or message.get('generation') != generation: raise Denied('Authentication/generation mismatch')
+        sequence(clients[connection], message)
         op = message.get('op')
         if op == 'hello': return {'generation': generation}
-        if op == 'status': return dict(registry.get(sid), reachability='reachable', output_complete=not draining, screen='Bounded byte replay only; exact screen restoration unavailable')
+        if op == 'status': return dict(registry.get(sid), reachability='reachable', output_complete=not draining, final_cursor=end, agent_process_group_quiescent=(not live and process_group_clear(pid)), requested_native_id=native_id, provider_native_id=None, writer_attached=writer is not None, observer_connections=sum(1 for state in clients.values() if state['mode']=='observe'), screen='Bounded byte replay only; exact screen restoration unavailable')
         if op in ('attach', 'claim'):
-            if op == 'attach' and message.get('mode') == 'observe': return {'writer': False}
+            if op == 'attach' and message.get('mode') == 'observe':
+                if writer is connection: raise Denied('Detach writer before observing')
+                clients[connection]['mode'] = 'observe'; return {'writer': False}
             if not live: raise Denied('Agent exited; input unavailable')
             if writer is not None and writer is not connection: raise Denied('Writer already attached')
-            writer = connection; update_status(); return {'writer': True}
+            writer = connection; clients[connection]['mode'] = 'write'; update_status(); return {'writer': True}
         if op == 'detach':
+            clients[connection]['mode'] = 'unattached'
             if writer is connection: writer = None; update_status()
             return {'detached': True}
         if op == 'output':
@@ -264,7 +341,7 @@ def supervise(root, sid, cwd):
                 if obj is listener:
                     conn, _ = listener.accept(); conn.setblocking(False)
                     if len(clients) >= 16 or peer_uid(conn) != os.getuid(): conn.close(); continue
-                    clients[conn] = {'in': bytearray(), 'out': bytearray(), 'seen': time.monotonic()}
+                    clients[conn] = {'in': bytearray(), 'out': bytearray(), 'seen': time.monotonic(), 'last_id': 0, 'hello': False, 'mode': 'unattached'}
                 elif obj == master:
                     try: data = os.read(master, 8192)
                     except BlockingIOError: continue
@@ -288,13 +365,13 @@ def supervise(root, sid, cwd):
                     raw = bytes(state['in'][4:4+size]); del state['in'][:4+size]
                     request = {}
                     try:
-                        request = json.loads(raw)
+                        request = decode_request(raw)
                         if not isinstance(request, dict): raise Denied('Invalid request')
                         result = dispatch(obj, request)
                         response = {'v': VERSION, 'id': request.get('id'), 'ok': True, 'result': result}
                         if request.get('op') == 'shutdown': running = False
-                    except (Denied, ValueError, TypeError, OSError) as error:
-                        response = {'v': VERSION, 'id': request.get('id') if isinstance(request, dict) else None, 'ok': False, 'error': str(error)}
+                    except (Denied, ValueError, TypeError, OSError, RecursionError) as error:
+                        response = {'v': VERSION, 'id': request.get('id') if isinstance(request, dict) and type(request.get('id')) is int and 0 < request['id'] <= 9007199254740991 else None, 'ok': False, 'error': str(error)}
                     state['out'].extend(frame(response))
                     if len(state['out']) > FRAME_LIMIT * 2: disconnect(obj)
             for conn in writable:
@@ -317,5 +394,5 @@ def supervise(root, sid, cwd):
 
 
 if __name__ == '__main__':
-    try: supervise(sys.argv[1], session_id(sys.argv[2]), sys.argv[3])
+    try: supervise(sys.argv[1], session_id(sys.argv[2]), sys.argv[3], sys.argv[4] if len(sys.argv)>4 else "skeptic-fake-v1", len(sys.argv)>5 and sys.argv[5]=="approved")
     except (Denied, OSError, ValueError): sys.exit(2)

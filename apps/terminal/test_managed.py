@@ -102,17 +102,30 @@ class ManagedTests(unittest.TestCase):
   finally:registry.close()
  def test_fragmented_request_and_oversize_do_not_block_other_clients(self):
   import json,struct
-  c=self.client();message=e.frame(dict(v=1,id=99,op='status',key=c.key,generation=c.metadata['generation']))
+  c=self.client();message=e.frame(dict(v=1,id=2,op='status',key=c.key,generation=c.metadata['generation']))
   c.socket.sendall(message[:3]);other=self.client();self.assertEqual(other.request('status')['id'],self.sid)
   c.socket.sendall(message[3:]);size=struct.unpack('!I',c.socket.recv(4))[0];body=b''
   while len(body)<size:body+=c.socket.recv(size-len(body))
   self.assertTrue(json.loads(body)['ok']);c.socket.sendall(struct.pack('!I',e.FRAME_LIMIT+1));self.assertEqual(c.socket.recv(1),b'');self.assertEqual(other.request('status')['id'],self.sid)
+ def test_deep_nested_and_invalid_request_id_survive(self):
+  import json,struct
+  c=self.client();other=self.client()
+  for raw in [b'{"data":'+b'['*1500+b'0'+b']'*1500+b'}',json.dumps(dict(v=1,id='x'*32000,op='status',key=c.key,generation=c.metadata['generation'])).encode()]:
+   c.socket.sendall(struct.pack('!I',len(raw))+raw)
+   def receive(size):
+    result=b''
+    while len(result)<size:result+=c.socket.recv(size-len(result))
+    return result
+   result=json.loads(receive(struct.unpack('!I',receive(4))[0]))
+   self.assertFalse(result['ok']);self.assertEqual(other.request('status')['id'],self.sid)
+  self.assertIsNone(self.process.poll())
+
  def test_state_alias_and_real_project_refused(self):
   alias=self.root/'alias';alias.symlink_to(self.state)
   with self.assertRaises(e.Denied):e.Registry(alias)
   with self.assertRaises(e.Denied):e.fixture_path(Path.home())
- def test_exit_output_fully_drained(self):
-  c=self.client();c.request('attach');self.send(c,'exit\n');data,_=self.output(c,b'FAKE_EXIT');self.assertIn(b'FAKE_EXIT',data);self.wait(lambda:c.request('status')['output_complete']);self.assertEqual(c.request('status')['exit_code'],0)
+ def test_exit_output_fully_drained_and_owned_process_group_gone(self):
+  c=self.client();c.request('attach');self.send(c,'exit\n');data,_=self.output(c,b'FAKE_EXIT');self.assertIn(b'FAKE_EXIT',data);self.wait(lambda:c.request('status')['output_complete']);status=c.request('status');self.assertEqual(status['exit_code'],0);self.assertTrue(status['agent_process_group_quiescent'])
 
  def test_shared_registry_stable_project_mapping(self):
   sid,process,info=cli.start(self.state,self.cwd);c=e.Client(self.state,sid)
@@ -131,6 +144,123 @@ class ManagedTests(unittest.TestCase):
   self.assertEqual(result,0);self.assertEqual(json.loads(output.getvalue())['agent'],self.info['agent'])
 
 @unittest.skipUnless(sys.platform=='darwin','macOS terminal acceptance')
+class ThreeSessionPTYAcceptance(unittest.TestCase):
+ """Three real managed PTYs; provider recovery remains deliberately synthetic."""
+ def setUp(self):
+  self.tmp=tempfile.TemporaryDirectory(prefix='sk3-');self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name).resolve();self.state=self.root/'state';self.processes={};self.clients={};self.ids={};self.provider_map={};self.last_inputs={}
+  self.state.mkdir(mode=0o700);import managed_switch;managed_switch.initialize(self.state)
+  self.assertLess(len(e.endpoint(self.state,str(uuid.uuid4())).encode()),104,'short temporary prefix is required by macOS AF_UNIX pathname limit')
+  self.manager=None;self.addCleanup(self.cleanup_owned)
+  for name in ('Daily Brief','Website','Research'):
+   cwd=self.root/name;cwd.mkdir();sid,proc,_=cli.start(self.state,cwd);self.ids[name]=sid;self.processes[sid]=proc
+ def client(self,sid):
+  client=e.Client(self.state,sid);self.clients[sid]=client;return client
+ def wait(self,predicate,timeout=5,diagnostics=None):
+  deadline=time.monotonic()+timeout
+  while time.monotonic()<deadline:
+   value=predicate()
+   if value:return value
+   time.sleep(.01)
+  self.fail('Three-session PTY fixture timed out'+ ('; '+diagnostics() if diagnostics else ''))
+ def send(self,client,text):
+  # These fixture commands target a line-reading fake, not a raw terminal UI.
+  body=(text if text.endswith('\n') else text+'\n').encode()
+  count=client.request('input',data=base64.b64encode(body).decode())['written']
+  self.last_inputs[client.metadata['id']]={'bytes':len(body),'pty_bytes_accepted':count,'newline_terminated':body.endswith(b'\n')}
+  self.assertEqual(count,len(body))
+ def output(self,client,needle,cursor=0):
+  data=bytearray();replay={};gap=False
+  def poll():
+   nonlocal cursor,gap,replay
+   result=client.request('output',cursor=cursor);gap=gap or result['gap'];replay={k:result[k] for k in ('start','end','cursor')};cursor=result['cursor'];data.extend(base64.b64decode(result['data']));return needle in data
+  def diagnostics():
+   sid=client.metadata['id'];process=self.processes.get(sid)
+   report={'session':sid,'supervisor_exit':process.poll() if process else None,'last_input':self.last_inputs.get(sid),'replay':replay,'replay_gap':gap,'bytes_observed':len(data),'child_ready_observed':b'FAKE_READY' in data,'child_echo_observed':b'ECHO=' in data,'expected':repr(needle[:200]),'output_tail':repr(bytes(data[-1024:])),'input_note':'PTY acknowledgement is not proof the child consumed input; ECHO= is the fake child response.'}
+   try:
+    status=client.request('status');report['status']={k:status.get(k) for k in ('id','agent','supervisor','status','exit_code','output_complete','final_cursor','writer_attached','reachability')}
+   except (e.Denied,OSError) as error:report['status_error']=str(error)[:200]
+   return __import__('json').dumps(report)[:4096]
+  self.wait(poll,diagnostics=diagnostics);return bytes(data),cursor
+ def quiescent(self,client):
+  status=client.request('status')
+  return status['status']=='exited' and status['output_complete'] and status['agent_process_group_quiescent']
+ def cleanup_owned(self):
+  clients=dict(self.clients)
+  for sid in self.processes:
+   if sid not in clients:
+    try:clients[sid]=e.Client(self.state,sid)
+    except (e.Denied,OSError):pass
+  for client in clients.values():
+   try:
+    status=client.request('status')
+    if status['status'] in ('live','detached','suspended'):
+     if status['status']=='suspended':os.killpg(status['agent'],signal.SIGCONT)
+     try:client.request('claim')
+     except e.Denied:pass
+     client.request('input',data=base64.b64encode(b'exit\n').decode())
+    self.wait(lambda:client.request('status')['status']=='exited',timeout=3)
+    client.request('shutdown')
+   except (e.Denied,OSError,AssertionError):
+    pass
+   client.close()
+  for process in self.processes.values():
+   if process.poll() is None:
+    try:process.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+     # Only this fixture's owned supervisor handle is signaled.
+     process.terminate();process.wait(timeout=3)
+  if self.manager:self.manager.close()
+ def test_three_isolated_agents_reconnect_and_selected_synthetic_switches(self):
+  import managed_switch
+  for name,sid in self.ids.items():
+   client=self.client(sid);client.request('attach');status=client.request('status')
+   self.assertEqual(Path(status['cwd']).name,name);self.assertEqual(status['id'],sid)
+   self.send(client,'IDENTITY-'+name);data,_=self.output(client,('ECHO=IDENTITY-'+name).encode())
+   for other in set(self.ids)-{name}:self.assertNotIn(('IDENTITY-'+other).encode(),data)
+  # Simultaneous independent writer leases and context, then detach/reconnect all.
+  for name,sid in self.ids.items():
+   self.clients[sid].request('detach');self.clients[sid].close()
+   client=self.client(sid);client.request('attach')
+   status=client.request('status');self.assertEqual(status['cwd'],str(self.root/name));self.assertEqual(status['id'],sid)
+  # Completed source processes are quiescent; Research remains live and excluded.
+  selected=('Daily Brief','Website')
+  for name in selected:self.send(self.clients[self.ids[name]],'exit\n')
+  for name in selected:
+   client=self.clients[self.ids[name]]
+   self.wait(lambda:self.quiescent(client))
+   self.assertEqual(self.clients[self.ids['Research']].request('status')['status'],'live')
+  def inspect(root,sid):
+   row=e.observation(root,sid)
+   if sid in self.provider_map:row['provider']=self.provider_map[sid]
+   return row
+  self.manager=managed_switch.Manager(self.state,inspect=inspect)
+  for name,sid in self.ids.items():self.manager.register(sid,name)
+  preview=self.manager.preview('codex');eligible={row['id'] for row in preview if row['eligible']}
+  self.assertEqual(eligible,{self.ids[name] for name in selected})
+  research=next(row for row in preview if row['id']==self.ids['Research']);self.assertFalse(research['eligible']);self.assertIn('still live',research['exclusion'])
+  transactions=[]
+  for name in selected:
+   sid=self.ids[name];objective='Continue the '+name+' task';packet='SYNTHETIC_CONTEXT|'+name+'|'+objective+'|pending item'
+   tx=self.manager.prepare(sid,'codex',packet,objective);self.manager.authorize(tx['id'],tx['hash'])
+   def launch(root,cwd,target,provider,context):
+    self.provider_map[target]=provider
+    _,process,_=cli.start(root,cwd,target,provider='skeptic-fake-v1',packet=context);self.processes[target]=process
+    client=self.client(target);client.request('attach');marker='RESTORED|'+context
+    self.send(client,marker);data,_=self.output(client,('ECHO='+marker).encode())
+    self.assertIn(marker.encode(),data);self.assertNotIn(('SYNTHETIC_CONTEXT|'+('Website' if name=='Daily Brief' else 'Daily Brief')).encode(),data)
+   self.manager.execute(tx['id'],launch)
+   receipt={'target':tx['target'],'project':tx['project'],'objective':tx['objective'],'checkpoint':tx['hash'],'provider':tx['provider']}
+   done=self.manager.verify(tx['id'],receipt);transactions.append(done['id'])
+   self.assertEqual(self.manager.details(done['target'])['task_state'],'recovered')
+   self.assertEqual(self.manager.db.execute('SELECT COUNT(*) FROM project_locks WHERE transaction_id=?',(done['id'],)).fetchone()[0],1)
+   with self.assertRaises(e.Denied):self.manager.prepare(sid,'codex',packet,objective)
+  self.assertEqual(len(set(transactions)),2)
+  self.assertEqual(e.observation(self.state,self.ids['Research'])['status'],'live')
+  self.send(self.clients[self.ids['Research']],'RESEARCH_STILL_OWNED')
+  data,_=self.output(self.clients[self.ids['Research']],b'ECHO=RESEARCH_STILL_OWNED')
+  self.assertIn(b'ECHO=RESEARCH_STILL_OWNED',data)
+
+
 class CLIAcceptance(unittest.TestCase):
  setUp=ManagedTests.setUp
  tearDown=ManagedTests.tearDown
