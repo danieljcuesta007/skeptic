@@ -10,7 +10,7 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 MARKER = '# Skeptic terminal PATH'
-LEGACY_SKILLS = {'3e6a5458e20095613b14efa59806fe7a14570facbf4daa62a1659d95103605b1', 'fa46d1a626d7ea7a49929e17ae78ca365e2a5be93ec781fe0b4eac41048b1ae0', '1295e0560d0dac183f10a636b726bc611dd9ff5bb3484c5275bf2eef958f5286'}
+LEGACY_SKILLS = {'3e6a5458e20095613b14efa59806fe7a14570facbf4daa62a1659d95103605b1', 'fa46d1a626d7ea7a49929e17ae78ca365e2a5be93ec781fe0b4eac41048b1ae0', '1295e0560d0dac183f10a636b726bc611dd9ff5bb3484c5275bf2eef958f5286', '5c585bb4a704f8b5ec5a5b37d5f879fbbeaf5baee247726d30e4d53bf3af9e1f', '36bc21f2ac7cccbbafed1728c44aceb1b6962982db334529a8bd927a35877222'}  # + 12 Oct 2026 shipped versions
 
 
 def safe_parent(path):

@@ -161,6 +161,20 @@ in `~` that has moved into a repository counts as that repository. Reads
 native session metadata only: no approvals, no history scan, no Git execution.
 The continuation it runs still asks for every approval it needs.
 
+**Frozen Claude.** A Claude session marked busy with no transcript output for
+8 minutes, or showing a usage-limit message, counts as frozen: it is offered
+for switching with a warning instead of "Wait". In that same Terminal press
+Ctrl+Z, run `skeptic`, and pick the engine.
+
+**Projects for sessions started in `~`.** If the transcript's own directory is
+home, the project is the most recent repository among the files Claude touched
+(Edit/Write/Read paths), so "Needs" only remains when no repository was touched.
+
+**Destinations:** Claude Code, Codex, **Hermes** (seeded with
+`hermes --in DIR chat --query-file …`, from a private 0600 file deleted when
+Hermes exits) and detected local models. `skeptic` lists them all;
+`--with hermes` picks Hermes directly.
+
 ## Keep your existing Claude session open
 
 Open a **second Mac Terminal**. Use the integration checkout directly so an older
