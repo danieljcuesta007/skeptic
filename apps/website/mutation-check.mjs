@@ -19,7 +19,8 @@ const cases = [
  ['failure shown while a copy is in flight', 'site.js: tabs switch by click and arrow keys; copy writes the command', 'site.js', s => s.replace('if (successes > before || pending > 1) return;', 'if (successes > before) return;')],
  ['stale failure shown after a success', 'site.js: tabs switch by click and arrow keys; copy writes the command', 'site.js', s => s.replace('if (successes > before || pending > 1) return;', 'if (pending > 1) return;')],
  ['repeat result not re-announced', 'site.js: tabs switch by click and arrow keys; copy writes the command', 'site.js', s => s.replace("status.textContent === message ? message + '\\u00a0' : message", 'message')],
- ['claims a selection that did not happen', 'copy degrades: no selection API gives an honest message; no status line keeps the buttons', 'site.js', s => s.replace("selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Copy the command above by hand.'", "'Copy failed. The command is selected so you can copy it yourself.'")],
+ ['claims a selection that did not happen', 'copy degrades: no selection API gives an honest message; no status line keeps the buttons', 'site.js', s => s.replace("selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Please copy the command by hand.'", "'Copy failed. The command is selected so you can copy it yourself.'")],
+ ['stale status kept after reset', 'site.js: tabs switch by click and arrow keys; copy writes the command', 'site.js', s => s.replace("button.textContent = label; status.textContent = '';", 'button.textContent = label;')],
  ['arrow keys ignored', 'site.js: tabs switch by click and arrow keys; copy writes the command', 'site.js', s => s.replace("e.key === 'ArrowRight' ? 1", "e.key === 'Nope' ? 1")],
 ];
 for (const [name, expected, file, mutate] of cases) {
