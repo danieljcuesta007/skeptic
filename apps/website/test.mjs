@@ -135,9 +135,10 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   // A lone failure selects the command and says so.
   fire(); await click().fail();
   assert.equal(copy.textContent, 'Copy failed'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /copy it yourself/);
-  status.textContent = 'Copy failed. The command is selected so you can copy it yourself.'; // as if another button said it
-  fire(); await click().fail(); assert.match(status.textContent, /\u00a0$/, 'a repeat from any button is re-announced');
-  assert.deepEqual(written, Array(6).fill('brew install skeptic'));
+  fire(); await click().ok();
+  status.textContent = 'Copy failed. The command is selected so you can copy it yourself.'; // another button just said this
+  await click().fail(); assert.match(status.textContent, /\u00a0$/, 'a repeat from any button is re-announced');
+  assert.deepEqual(written, Array(7).fill('brew install skeptic'));
   assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
@@ -149,20 +150,39 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
 test('copy degrades: no selection API gives an honest message; no status line keeps the buttons', async () => {
   const copy = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, previousElementSibling: { tagName: 'PRE' }, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
   const status = { textContent: '' };
-  runInNewContext(js, { getSelection: () => null, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
+  runInNewContext(js, { getSelection: () => { throw new Error('no selection here'); }, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
     navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
   await copy.listeners.click();
-  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /by hand/);
+  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /select the command and copy it/);
   const kept = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
   runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [kept] : [] }, navigator: { clipboard: { writeText: async () => {} } }, setTimeout() {}, clearTimeout() {} });
   await kept.listeners.click();
   assert.equal(kept.removed, undefined); assert.equal(kept.textContent, 'Copied');
+  const lost = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } };
+  runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [lost] : [] }, navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
+  await lost.listeners.click();
+  assert.equal(lost.textContent, 'Copy failed', 'a failure without a status line still shows on the button');
+});
+
+test('two copy buttons share the status line without wiping each other', async () => {
+  const timers = [];
+  const mk = () => ({ textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
+  const a = mk(), b = mk(); const status = { textContent: '' };
+  let fail = false;
+  runInNewContext(js, { getSelection: () => ({ selectAllChildren() {} }), document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [a, b] : [] },
+    navigator: { clipboard: { writeText: async () => { if (fail) throw new Error('denied'); } } }, setTimeout: fn => timers.push(fn), clearTimeout() {} });
+  await a.listeners.click();
+  fail = true; await b.listeners.click();
+  const said = status.textContent;
+  timers[0]();  // A's reset fires after B spoke
+  assert.equal(a.textContent, 'Copy'); assert.equal(status.textContent, said, "B's message survives A's reset");
 });
 
 test('the page has the status line copy results are announced in', () => {
   const tags = home.match(/<[^>]*data-copy-status[^>]*>/g) || [];
   assert.equal(tags.length, 1, 'exactly one status line');
   assert.match(tags[0], /role="status"/);
+  assert.match(tags[0], /class="visually-hidden"/, 'the status line must stay invisible');
 });
 
 test('build ships exactly the reviewed files, unchanged and free of private data', async () => {

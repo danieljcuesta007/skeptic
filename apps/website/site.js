@@ -32,10 +32,10 @@ function initCopy(button, clipboard, status, select) {
   let timer, successes = 0, pending = 0;
   const show = (text, message) => {
     button.textContent = text;
-    if (status) // one status line for every button; a changed string is re-announced
-      status.textContent = status.textContent === message ? message + '\u00a0' : message;
+    // One status line for every button; a changed string is re-announced.
+    status.textContent = status.textContent === message ? message + '\u00a0' : message;
     clearTimeout(timer);
-    timer = setTimeout(() => { button.textContent = label; }, 1600);
+    timer = setTimeout(() => { button.textContent = label; }, 1600); // the status line is shared: never cleared by one button's timer
   };
   button.addEventListener('click', async () => {
     const before = successes;
@@ -48,7 +48,7 @@ function initCopy(button, clipboard, status, select) {
       if (successes > before || pending > 1) return; // another copy landed, or still may
       const code = button.previousElementSibling;
       const selected = code && code.tagName === 'PRE' && select(code);
-      show('Copy failed', selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Copy the command above by hand.');
+      show('Copy failed', selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Please select the command and copy it.');
     } finally { pending--; }
   });
 }
@@ -67,8 +67,9 @@ if (typeof document !== 'undefined' && document.querySelectorAll) {
   document.querySelectorAll('[data-tabs]').forEach(initTabs);
   const clipboard = typeof navigator !== 'undefined' && navigator.clipboard;
   const status = document.querySelector('[data-copy-status]');
-  const select = el => { const sel = typeof getSelection === 'function' && getSelection(); if (!sel) return false; sel.selectAllChildren(el); return true; };
-  document.querySelectorAll('[data-copy]').forEach(b => clipboard ? initCopy(b, clipboard, status, select) : b.remove()); // no status line: no announcement, buttons still work
+  const select = el => { try { const sel = getSelection(); sel.selectAllChildren(el); return true; } catch { return false; } };
+  const silent = { textContent: '' }; // no status line: no announcement, buttons still work
+  document.querySelectorAll('[data-copy]').forEach(b => clipboard ? initCopy(b, clipboard, status || silent, select) : b.remove());
   document.querySelectorAll('[data-replay]').forEach(r => { r.classList.add('playing'); initReplay(r); });
 }
 
