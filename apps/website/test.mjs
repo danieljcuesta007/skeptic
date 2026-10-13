@@ -111,16 +111,20 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   const copy = el(); copy.dataset.copy = 'brew install skeptic';
   const written = [];
   const document = { querySelectorAll: sel => sel === '[data-tabs]' ? [root] : sel === '[data-copy]' ? [copy] : [] };
-  const timers = [], cleared = [];
-  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); } } }, setTimeout: () => timers.push(1) && timers.length, clearTimeout: id => cleared.push(id) });
+  const timers = new Map(); let next = 0;
+  let release; const slow = new Promise(r => { release = r; });
+  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); await slow; } } },
+    setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   tabs[1].listeners.click();
   assert.equal(tabs[1].attrs['aria-selected'], 'true'); assert.equal(panels['p-a'].hidden, true); assert.equal(panels['p-b'].hidden, false);
   tabs[1].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
   assert.equal(tabs[0].attrs['aria-selected'], 'true'); assert.equal(focused, tabs[0]);
-  await copy.listeners.click();
-  assert.deepEqual(written, ['brew install skeptic']); assert.equal(copy.textContent, 'Copied');
-  await copy.listeners.click();
-  assert.deepEqual(cleared, [undefined, 1], 'a second click cancels the first reset timer');
+  const clicks = Promise.all([copy.listeners.click(), copy.listeners.click()]); // overlap a slow clipboard write
+  release(); await clicks;
+  assert.deepEqual(written, ['brew install skeptic', 'brew install skeptic']); assert.equal(copy.textContent, 'Copied');
+  assert.equal(timers.size, 1, 'only the newest reset timer is left running');
+  [...timers.values()][0]();
+  assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = el(); lone.dataset.copy = 'x';
   runInNewContext(js, { document: { querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
   assert.equal(lone.removed, true, 'copy buttons disappear when there is no clipboard');
