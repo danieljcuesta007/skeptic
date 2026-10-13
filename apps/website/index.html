@@ -178,13 +178,14 @@
       <h3>Safe by construction</h3>
       <ul class="checklist">
         <li>The one-line installer checks the download's SHA-256 checksum and stops if it doesn't match.</li>
-        <li>Everything lands in your home folder: <code>~/.local/share/skeptic</code> and <code>~/.local/bin/skeptic</code>.</li>
-        <li>Existing files are never overwritten. The installer refuses and tells you why.</li>
+        <li>Everything stays in your home folder: the app in <code>~/.local/share/skeptic</code>, the command in <code>~/.local/bin</code>, one marked line in <code>~/.zshrc</code>, and the <code>/skeptic</code> helpers for Claude Code and Codex.</li>
+        <li>It only replaces files it put there itself. If you've changed one, it stops and tells you which.</li>
       </ul>
       <h3>Remove it</h3>
-      <pre class="plain"><code>brew uninstall skeptic
-# or, for the one-line install:
-rm -rf ~/.local/share/skeptic ~/.local/bin/skeptic</code></pre>
+      <pre class="plain"><code>brew uninstall skeptic        # Homebrew
+rm -rf ~/.local/share/skeptic ~/.local/bin/skeptic   # one-line install
+rm -rf ~/.claude/skills/skeptic ~/.agents/skills/skeptic ~/.skeptic-cli</code></pre>
+      <p class="small-note">Last, delete the two lines under <code># Skeptic terminal PATH</code> in <code>~/.zshrc</code> if they're there.</p>
     </div>
   </div>
 </section>

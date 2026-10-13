@@ -140,6 +140,7 @@ thead .us { font-size:13px; }
 .install-grid h3:not(:first-child) { margin-top:36px; }
 .checklist { margin:0; padding-left:22px; color:var(--muted); }
 .checklist li { margin:0 0 10px; padding-left:4px; }
+.small-note { color:var(--muted); font-size:14px; margin:12px 0 0; }
 pre.plain { margin:0; padding:16px; background:var(--ink); color:#ededed; border-radius:12px; font-size:13.5px; white-space:pre-wrap; }
 
 /* Creator */

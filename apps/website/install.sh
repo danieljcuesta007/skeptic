@@ -4,11 +4,13 @@
 # Read this before you run it. It is short on purpose. It:
 #   1. downloads one release archive from GitHub,
 #   2. checks it against the SHA-256 printed below and stops if they differ,
-#   3. unpacks it to ~/.local/share/skeptic/<version>,
-#   4. runs Skeptic's own installer, which puts `skeptic` in ~/.local/bin
-#      and adds the /skeptic helpers for Claude Code and Codex.
-# No sudo, no admin rights, nothing outside your home folder.
-# Remove later with: rm -rf ~/.local/share/skeptic ~/.local/bin/skeptic
+#   3. unpacks it to ~/.local/share/skeptic/<version> (older versions are removed),
+#   4. runs Skeptic's own installer, which puts `skeptic` in ~/.local/bin, adds one
+#      marked PATH line to ~/.zshrc (skip with --no-profile) and adds the /skeptic
+#      helpers to ~/.claude/skills and ~/.agents/skills.
+# No sudo, no admin rights, nothing outside your home folder. Files you changed
+# yourself are never overwritten: the installer stops and says which one.
+# Remove everything: see "Remove it" on https://skeptic.pages.dev/#install
 #
 # Options are passed through to the installer, for example:
 #   curl -fsSL https://skeptic.pages.dev/install.sh | sh -s -- --no-profile
@@ -38,9 +40,17 @@ actual=$(shasum -a 256 "$tmp/skeptic.tar.gz" | cut -d' ' -f1)
 [ "$actual" = "$SHA256" ] || die "checksum mismatch (expected $SHA256, got $actual). Nothing was installed."
 say "checksum verified"
 
-mkdir -p "$PREFIX/$VERSION"
-tar -xzf "$tmp/skeptic.tar.gz" -C "$PREFIX/$VERSION" --strip-components 1
-ln -sfn "$VERSION" "$PREFIX/current"
+rm -rf "$PREFIX/$VERSION.new"
+mkdir -p "$PREFIX/$VERSION.new"
+tar -xzf "$tmp/skeptic.tar.gz" -C "$PREFIX/$VERSION.new" --strip-components 1
+rm -rf "$PREFIX/$VERSION"
+mv "$PREFIX/$VERSION.new" "$PREFIX/$VERSION"
 
 python3 -B "$PREFIX/$VERSION/apps/terminal/install.py" --upgrade-integrations "$@"
+
+# The launcher now points at this version; earlier versions are no longer used.
+# Only folders that are clearly earlier Skeptic versions, never anything else in $PREFIX.
+for old in "$PREFIX"/[0-9]*.[0-9]*; do
+  [ "$old" != "$PREFIX/$VERSION" ] && [ -f "$old/apps/terminal/install.py" ] && rm -rf "$old"
+done
 say "done. Open a new Terminal window, then run: skeptic"

@@ -24,8 +24,8 @@ function initTabs(root) {
 }
 
 function initCopy(button, clipboard) {
+  const label = button.textContent;  // read once, so a double click can't save "Copied" as the label
   button.addEventListener('click', async () => {
-    const label = button.textContent;
     try { await clipboard.writeText(button.dataset.copy); button.textContent = 'Copied'; }
     catch { button.textContent = 'Select and copy'; }
     setTimeout(() => { button.textContent = label; }, 1600);

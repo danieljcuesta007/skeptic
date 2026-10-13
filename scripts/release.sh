@@ -18,7 +18,8 @@ cd "$ROOT"
 last=$(git describe --tags --abbrev=0 2>/dev/null || true)
 if [ -n "$last" ]; then
   for f in skeptic-claude.md skeptic-codex.md; do
-    old=$(git show "$last:apps/terminal/$f" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    git cat-file -e "$last:apps/terminal/$f" 2>/dev/null || continue  # new since the last tag: nothing to upgrade from
+    old=$(git show "$last:apps/terminal/$f" | shasum -a 256 | cut -d' ' -f1)
     new=$(shasum -a 256 "apps/terminal/$f" | cut -d' ' -f1)
     if [ "$old" != "$new" ] && ! grep -q "$old" apps/terminal/install.py; then
       echo "release: $f changed since $last; add $old to LEGACY_SKILLS in apps/terminal/install.py" >&2; exit 1
@@ -26,6 +27,7 @@ if [ -n "$last" ]; then
   done
 fi
 
+commit=$(git rev-parse HEAD)
 mkdir -p dist
 archive="dist/skeptic-$VERSION.tar.gz"
 git archive --format=tar.gz --prefix="skeptic-$VERSION/" -o "$archive" HEAD
@@ -40,9 +42,12 @@ Built $archive
 SHA-256 $sha
 Updated apps/website/install.sh and Formula/skeptic.rb.
 
+The archive is commit $commit. Tag THAT commit, so \`git archive v$VERSION\`
+reproduces the same bytes (the checksum edits above land in a later commit).
+
 To publish (each step is outward-facing; do it on purpose):
-  1. PR the install.sh + Formula change to dev, then dev to main.
-  2. git tag v$VERSION && git push origin v$VERSION
-  3. gh release create v$VERSION $archive --title "Skeptic $VERSION" --notes-file <notes>
+  1. git tag v$VERSION $commit && git push origin v$VERSION
+  2. gh release create v$VERSION $archive --title "Skeptic $VERSION" --notes-file <notes>
+  3. PR the install.sh + Formula change to dev, then dev to main.
   4. Deploy the site so /install.sh carries the new checksum.
 MSG

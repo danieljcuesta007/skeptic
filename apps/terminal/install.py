@@ -44,7 +44,7 @@ def install(home, integrations=True, profile=True, upgrade=False, launcher_too=T
     bindir = home / '.local/bin'
     if not launcher_too:  # a package manager owns the command; only the helpers go in
         install_skills(home, integrations, upgrade)
-        print('Installed the skeptic helpers for Claude Code and Codex. The command itself comes from your package manager.')
+        print('Installed the skeptic helpers for Claude Code and Codex.' if integrations else 'Nothing to install: no helpers were selected.')
         return
     safe_parent(bindir)
     launcher = '#!/bin/sh\n# Skeptic launcher; rerun installer after moving repository.\nexec ' + shlex.quote(sys.executable) + ' -B ' + shlex.quote(str(HERE / 'switcher.py')) + ' "$@"\n'

@@ -17,11 +17,12 @@ class InstallScriptTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix='skeptic-install-')).resolve()  # /var is a symlink on macOS
         self.home = self.tmp / 'home'; self.home.mkdir()
         self.archive = self.tmp / 'skeptic-0.1.0.tar.gz'
-        skip = {'__pycache__', 'dist', 'node_modules', 'build'}
-        with tarfile.open(self.archive, 'w:gz') as tar:  # the same folders scripts/release.sh ships
-            for part in ('apps', 'packages'):
-                tar.add(ROOT / part, arcname='skeptic-0.1.0/' + part,
-                        filter=lambda t: None if skip & set(Path(t.name).parts) else t)
+        # The same file set as scripts/release.sh (git archive): every tracked file,
+        # read from the working tree so uncommitted changes are tested too.
+        tracked = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, capture_output=True, check=True).stdout.decode().split('\0')
+        with tarfile.open(self.archive, 'w:gz') as tar:
+            for name in filter(None, tracked):
+                if (ROOT / name).exists(): tar.add(ROOT / name, arcname='skeptic-0.1.0/' + name, recursive=False)
         self.sha = hashlib.sha256(self.archive.read_bytes()).hexdigest()
 
     def tearDown(self):
@@ -42,8 +43,19 @@ class InstallScriptTests(unittest.TestCase):
         self.assertEqual(help_text.returncode, 0, help_text.stderr)
         self.assertIn('continue', help_text.stdout)
         self.assertTrue((self.home / '.claude/skills/skeptic/SKILL.md').exists())
-        self.assertTrue((self.home / '.local/share/skeptic/current').is_symlink())
+        self.assertTrue((self.home / '.local/share/skeptic/0.1.0/apps/terminal/switcher.py').exists())
         self.assertFalse((self.home / '.zshrc').exists(), '--no-profile is passed through')
+
+    def test_upgrade_prunes_old_versions_but_nothing_else(self):
+        share = self.home / '.local/share/skeptic'
+        (share / '0.0.9/apps/terminal').mkdir(parents=True)
+        (share / '0.0.9/apps/terminal/install.py').write_text('# old')
+        (share / '1.0-notes').mkdir()  # looks like a version but isn't Skeptic
+        result = self.run_installer(self.sha)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((share / '0.0.9').exists())
+        self.assertTrue((share / '1.0-notes').exists())
+        self.assertTrue((share / '0.1.0').exists())
 
     def test_tampered_archive_installs_nothing(self):
         result = self.run_installer('0' * 64)
