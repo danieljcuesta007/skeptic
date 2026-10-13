@@ -2,6 +2,18 @@
 
 **Your AI can change. Your knowledge stays.**
 
+## Install
+
+```sh
+brew tap danieljcuesta007/skeptic https://github.com/danieljcuesta007/skeptic
+brew install skeptic && skeptic-setup
+# or
+curl -fsSL https://skeptic.pages.dev/install.sh | sh
+```
+
+The one-line installer checks the release's SHA-256 before unpacking anything and only
+writes inside your home folder. Releases: `scripts/release.sh <version>` (see the script).
+
 Pre-alpha, provider-independent Markdown knowledge bridge. This repository contains
 website/onboarding and discovery prototypes plus a read-only local project app,
 automatically tested on synthetic data only. Daniel confirmed the initial local MVP;
@@ -28,7 +40,8 @@ No commits, pushes or deployment are performed by the switcher.
 
 ## Layout
 
-- `apps/website/` — static marketing site, eight-step demo and manual browser checklist.
+- `apps/website/` — the product site (skeptic.pages.dev) and `install.sh`.
+- `Formula/skeptic.rb` — Homebrew formula; `scripts/release.sh` — release builder.
 - `apps/local/` — local project approvals, attributed overviews and copyable resume prompts.
 - `packages/discovery/` — local lexical index, three access modes and neutral receipts.
 - `packages/discovery/baseline-v1/` — preserved V1 regression source and fixtures.
@@ -66,9 +79,8 @@ Open http://127.0.0.1:4317. Stop with Ctrl-C. Connect your vault and repository 
 with explicit read approval;
 no note edits/uploads/provider calls. [First-use, security and removal guide](apps/local/README.md).
 Real socket/browser acceptance is pending; [manual checklist](apps/local/BROWSER-ACCEPTANCE.md).
-Step 43A public website remains separate, partial and not deployed.
 
-Website prototype:
+Website:
 
     cd apps/website
     npm run build

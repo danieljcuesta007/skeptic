@@ -39,9 +39,14 @@ def write_owned(path, text, mode=0o600, upgrade=False):
     with os.fdopen(fd, 'w') as out: out.write(text)
 
 
-def install(home, integrations=True, profile=True, upgrade=False):
+def install(home, integrations=True, profile=True, upgrade=False, launcher_too=True):
     home = Path(home)
-    bindir = home / '.local/bin'; safe_parent(bindir)
+    bindir = home / '.local/bin'
+    if not launcher_too:  # a package manager owns the command; only the helpers go in
+        install_skills(home, integrations, upgrade)
+        print('Installed the skeptic helpers for Claude Code and Codex.' if integrations else 'Nothing to install: no helpers were selected.')
+        return
+    safe_parent(bindir)
     launcher = '#!/bin/sh\n# Skeptic launcher; rerun installer after moving repository.\nexec ' + shlex.quote(sys.executable) + ' -B ' + shlex.quote(str(HERE / 'switcher.py')) + ' "$@"\n'
     try: write_owned(bindir / 'skeptic', launcher, 0o700)
     except ValueError as error:
@@ -63,14 +68,18 @@ def install(home, integrations=True, profile=True, upgrade=False):
                 os.lseek(fd, 0, os.SEEK_END)
                 os.write(fd, ('\n' + MARKER + '\nexport PATH="$HOME/.local/bin:$PATH"\n').encode())
         finally: os.close(fd)
-    if integrations:
-        for provider, base in [('claude', home / '.claude/skills'), ('codex', home / '.agents/skills')]:
-            if integrations is not True and provider not in integrations: continue
-            folder = base / 'skeptic'; safe_parent(folder)
-            write_owned(folder / 'SKILL.md', (HERE / ('skeptic-' + provider + '.md')).read_text(), upgrade=upgrade)
+    install_skills(home, integrations, upgrade)
     print('Installed: ' + str(bindir / 'skeptic'))
     print('Existing terminals: export PATH="$HOME/.local/bin:$PATH"; rehash')
     print('From Claude: Ctrl+Z returns to the same shell without closing it; run skeptic. Second Terminal is the fallback.')
+
+
+def install_skills(home, integrations=True, upgrade=False):
+    if not integrations: return
+    for provider, base in [('claude', home / '.claude/skills'), ('codex', home / '.agents/skills')]:
+        if integrations is not True and provider not in integrations: continue
+        folder = base / 'skeptic'; safe_parent(folder)
+        write_owned(folder / 'SKILL.md', (HERE / ('skeptic-' + provider + '.md')).read_text(), upgrade=upgrade)
 
 
 def activate_launcher(home, source=HERE):
@@ -119,7 +128,8 @@ if __name__ == '__main__':
     p.add_argument('--no-integrations', action='store_true')
     p.add_argument('--no-profile', action='store_true')
     p.add_argument('--integration', choices=['all', 'claude', 'codex', 'none'], default='all')
+    p.add_argument('--skills-only', action='store_true', help='Only install the Claude Code/Codex helpers (Homebrew provides the command)')
     a = p.parse_args()
     selected = False if a.no_integrations or a.integration == 'none' else True if a.integration == 'all' else [a.integration]
-    try: install(Path.home(), selected, not a.no_profile, a.upgrade_integrations)
+    try: install(Path.home(), selected, not a.no_profile and not a.skills_only, a.upgrade_integrations, not a.skills_only)
     except (OSError, ValueError) as exc: print('Installation: ' + str(exc), file=sys.stderr); sys.exit(1)

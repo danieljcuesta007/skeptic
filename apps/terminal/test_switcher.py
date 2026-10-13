@@ -426,6 +426,15 @@ class SwitchTests(unittest.TestCase):
                 if proc.poll() is None: proc.kill(); proc.wait()
                 os.close(master)
 
+    def test_skills_only_install_leaves_launcher_and_profile_alone(self):  # Homebrew owns the command
+        home = self.root / 'home'; home.mkdir()
+        (home / '.zshrc').write_text('# original\n')
+        with contextlib.redirect_stdout(io.StringIO()): install.install(home, profile=False, launcher_too=False)
+        self.assertFalse((home / '.local/bin/skeptic').exists())
+        self.assertEqual((home / '.zshrc').read_text(), '# original\n')
+        self.assertTrue((home / '.claude/skills/skeptic/SKILL.md').exists())
+        self.assertTrue((home / '.agents/skills/skeptic/SKILL.md').exists())
+
     def test_install_does_not_overwrite_existing(self):
         home = self.root / 'home'; (home / '.local/bin').mkdir(parents=True)
         (home / '.local/bin/skeptic').write_text('existing')

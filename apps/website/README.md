@@ -1,37 +1,36 @@
-# Skeptic website V1
-Local-only, white-first editorial prototype. HTML/CSS/vanilla JavaScript. No runtime dependencies, remote assets, accounts, analytics or API calls. Synthetic demo only.
+# Skeptic website
 
-Requires Node 18+ to build/test and Python 3 to preview:
+The product site at https://skeptic.pages.dev: what Skeptic does, how to install it
+(Homebrew, a one-line script, or from source), an honest comparison, the creator, and
+a privacy/license/trademarks page. Static HTML/CSS with one small script, no
+dependencies, no third-party requests, no cookies or analytics.
 
-    npm run build
-    npm test
-    npm run preview
+Requires Node 18+ to build and test, Python 3 to preview:
 
-Open http://127.0.0.1:4173. Stop preview with Ctrl-C.
+    npm run build             # copies the 7 shipped files to dist/
+    npm test                  # 11 tests: links, CSP, accessibility, palette, honesty, installer
+    node mutation-check.mjs   # plants 13 faults and confirms each is caught
+    npm run preview           # http://127.0.0.1:4173
 
-Cloudflare Pages static configuration: build command `npm run build`, output directory `dist`. No deployment has been performed. Publishing requires separate authorization.
+## Files
 
-The onboarding simulator does not read files or connect to providers. The template download contains invented sample content. Project documentation and archive test evidence informed status labels; no private notes are included. Full-brain indexing, provider adapters and automatic preference learning remain unimplemented design targets.
+| File | What |
+| --- | --- |
+| `index.html` | The product page |
+| `legal.html` | Privacy, license, trademarks, credits, contact |
+| `style.css` | Brand v1: ink, paper, greys; serif headings, mono labels |
+| `site.js` | Install tabs, copy buttons, the terminal replay |
+| `install.sh` | The one-line installer, served at `/install.sh` as plain text |
+| `_headers` | Cloudflare Pages security headers (strict CSP) |
 
-## Homepage and guide
+`install.sh` and `../../Formula/skeptic.rb` carry the release checksum.
+`scripts/release.sh <version>` fills both in; the tests fail if they disagree.
 
-The homepage has six focused sections. `guide.html` preserves the full eight-step
-walkthrough, sample receipt, product details, documentation, FAQ and inert signup.
-Both pages share readable typography and wrapping controls. Browser acceptance
-remains pending; see [Step 43 report](../../docs/ux/STEP43-REFINEMENT.md).
+## Deploy
 
-## Guided onboarding and product status
+Cloudflare Pages project `skeptic` (personal account), Direct Upload of `dist/`:
 
-The eight-step walkthrough offers Claude Code, Codex, local model and starting-fresh paths; three knowledge sources; explicit policy selection; synthetic preference and handoff previews; completion and restart. Early access is a UI demo with a disabled example email: no collection, storage or submission.
+    npm run build && npx wrangler pages deploy dist --project-name skeptic
 
-`wizard-state.js` keeps state transitions separate from DOM rendering. `onboarding.js` provides the accessible view. The original receipt demo and Markdown download remain. Marketing distinguishes documented workflows, isolated prototypes and planned integrations. Engine V2 is developed independently; this website does not invoke it.
-
-Release gates: real desktop/mobile visual QA, keyboard and assistive-technology testing, truthful provider disclosures, native adapter acceptance, privacy/security review and deployment approval. No production readiness claim is made.
-
-## Visual architecture / Step 43A
-
-Three responsive HTML architecture diagrams distinguish synthetic prototypes,
-documented workflows and planned integrations. No external image/font dependencies.
-Eight-asset Direct Upload readiness is documented in `CLOUDFLARE-PLAN.md`; no account,
-project or deployment is confirmed. Browser acceptance blocks public upload.
-Full evidence: [Step 43A report](../../docs/ux/STEP43A-LAUNCH-READINESS.md).
+Deploying is a deliberate step: only after the matching GitHub release exists, so the
+install commands on the page work.

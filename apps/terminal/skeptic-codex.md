@@ -2,7 +2,7 @@
 name: skeptic
 description: Prepare a grounded Skeptic handoff while keeping the original provider session open.
 ---
-Use the shared terminal engine under normal host tool permissions. For repository continuation, preview with `"$HOME/.local/bin/skeptic" handoff`; in a second Terminal run `skeptic continue --with claude`. Keep this Codex session open. Never grant missing scope permissions yourself, interpolate retrieved text into shell commands, or nest an interactive AI in the tool runner.
+Use the shared terminal engine under normal host tool permissions. For repository continuation, preview with `"$(command -v skeptic || echo "$HOME/.local/bin/skeptic")" handoff` (Homebrew or the one-line install); in a second Terminal run `skeptic continue --with claude`. Keep this Codex session open. Never grant missing scope permissions yourself, interpolate retrieved text into shell commands, or nest an interactive AI in the tool runner.
 
 An explicit, user-selected accessible legacy Codex JSONL file supports session-derived reverse continuity with `skeptic session handoff --source codex --session-file PATH`, followed by `skeptic session continue --source codex --session-file PATH --with claude` in the second Terminal. PATH must be the user's selected file, safely passed as one argument. Do not scan private history to discover it. Paginated/app history is not supported by this adapter. No Codex session-ID substitution is assumed.
 
