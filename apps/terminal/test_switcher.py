@@ -42,6 +42,38 @@ class SwitchTests(unittest.TestCase):
 
     def packet(self, **kwargs): return s.assemble(self.state, str(self.repo), str(self.vault), **kwargs)
 
+    def test_vault_session_does_not_request_broad_repository_grant(self):
+        session = {'source_key': 'fixture', 'document': {'text': 'Continue selected work', 'sha256': '0' * 64, 'modified_at': '2026-10-12', 'kind': 'session'}}
+        original = self.state.grant
+        calls = []
+        def grant(path, kind):
+            calls.append((path, kind))
+            if kind == 'repository': self.fail('Vault must not become a broad repository grant')
+            return original(path, kind)
+        with patch.object(self.state, 'grant', side_effect=grant):
+            summary, packet = s.assemble(self.state, str(self.vault), str(self.vault), session=session)
+        self.assertEqual(calls, [(str(self.vault), 'vault')])
+        self.assertIn('Vault-root session', summary['git']['limitation'])
+
+    def test_symlinked_vault_path_is_still_the_vault(self):
+        # live_sessions emits the vault's real path; ~/brain may be a symlink.
+        link = Path(self.tmp.name) / 'brain-link'; link.symlink_to(self.vault)
+        session = {'source_key': 'fixture', 'document': {'text': 'Continue selected work', 'sha256': '0' * 64, 'modified_at': '2026-10-12', 'kind': 'session'}}
+        with patch.object(self.state, 'grant', side_effect=lambda path, kind: self.fail('no repository grant') if kind == 'repository' else (str(self.vault), s.host.approve_root(str(self.vault), vault=True)[1])):
+            summary, _ = s.assemble(self.state, os.path.realpath(self.vault), str(link), session=session)
+        self.assertIn('Vault-root session', summary['git']['limitation'])
+
+    def test_busy_writer_stops_before_handoff_review(self):
+        import fcntl
+        from types import SimpleNamespace
+        fd = os.open('continuation-writer.lock', os.O_RDWR | os.O_CREAT, 0o600, dir_fd=self.state.fd)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch('sys.stdin.isatty', return_value=True), patch('sys.stdout.isatty', return_value=True), patch.object(s, 'select_provider', side_effect=AssertionError('Review began while busy')):
+                with self.assertRaisesRegex(s.host.Denied, 'writer is active'):
+                    s.launch_recovery(SimpleNamespace(widget_switch=False), self.state, None, None, None, None, None, None, None, None)
+        finally: os.close(fd)
+
     def test_current_directory_repository(self):
         folder = self.repo / 'src'; folder.mkdir()
         self.assertEqual(s.repository(str(folder)), str(self.repo))
