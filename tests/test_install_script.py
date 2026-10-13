@@ -1,6 +1,7 @@
 """End to end: the one-line installer, run against a fake home with a local archive."""
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -30,7 +31,7 @@ class InstallScriptTests(unittest.TestCase):
 
     def run_installer(self, sha):
         script = self.tmp / 'install.sh'
-        script.write_text(SCRIPT.read_text().replace('SHA256="UNRELEASED"', f'SHA256="{sha}"'))
+        script.write_text(re.sub(r'^SHA256=".*"$', f'SHA256="{sha}"', SCRIPT.read_text(), count=1, flags=re.M))
         env = dict(os.environ, HOME=str(self.home), SKEPTIC_URL=self.archive.as_uri())
         return subprocess.run(['sh', str(script), '--no-profile'], env=env, capture_output=True, text=True, timeout=120)
 
