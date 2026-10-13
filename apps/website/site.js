@@ -25,10 +25,12 @@ function initTabs(root) {
 
 function initCopy(button, clipboard) {
   const label = button.textContent;  // read once, so a double click can't save "Copied" as the label
+  let timer;
   button.addEventListener('click', async () => {
     try { await clipboard.writeText(button.dataset.copy); button.textContent = 'Copied'; }
     catch { button.textContent = 'Select and copy'; }
-    setTimeout(() => { button.textContent = label; }, 1600);
+    clearTimeout(timer); // after the await, so overlapping clicks can't leave an old timer running
+    timer = setTimeout(() => { button.textContent = label; }, 1600);
   });
 }
 
