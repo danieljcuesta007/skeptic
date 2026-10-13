@@ -113,9 +113,9 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   const document = { querySelector: sel => sel === '[data-copy-status]' ? status : null, querySelectorAll: sel => sel === '[data-tabs]' ? [root] : sel === '[data-copy]' ? [copy] : [] };
   const timers = new Map(); let next = 0;
   const writes = [];
-  let clock = 1000; const selected = []; const code = { tag: 'pre' }; copy.previousElementSibling = code;
+  const selected = []; const code = { tagName: 'PRE' }; copy.previousElementSibling = code;
   const status = { textContent: '' };
-  runInNewContext(js, { getSelection: () => ({ selectAllChildren: el => selected.push(el) }), Date: { now: () => clock }, document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
+  runInNewContext(js, { getSelection: () => ({ selectAllChildren: el => selected.push(el) }), document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
     setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   tabs[1].listeners.click();
   assert.equal(tabs[1].attrs['aria-selected'], 'true'); assert.equal(panels['p-a'].hidden, true); assert.equal(panels['p-b'].hidden, false);
@@ -125,24 +125,44 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   const fire = () => { [...timers.values()].at(-1)(); timers.clear(); };
   // A slow failure that settles after a newer success (even after the reset) changes nothing.
   let slow = click(), fast = click();
-  clock += 10; await fast.ok(); assert.equal(copy.textContent, 'Copied'); assert.equal(status.textContent, 'Copied to clipboard');
-  fire(); assert.equal(copy.textContent, 'Copy');
-  clock += 5000; await slow.fail(); assert.equal(copy.textContent, 'Copy', 'a stale failure never shows');
-  assert.deepEqual(selected, []);
-  // A failure with no success since it began selects the command and says how to copy.
-  clock += 10; await click().fail();
-  assert.equal(copy.textContent, 'Press \u2318C'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /Command C/);
-  // A pending click never hides a later success, whatever order they settle in.
-  fire(); slow = click(); fast = click();
-  clock += 10; await fast.fail(); assert.equal(copy.textContent, 'Press \u2318C');
-  clock += 10; await slow.ok(); assert.equal(copy.textContent, 'Copied');
-  assert.deepEqual(written, Array(5).fill('brew install skeptic'));
+  await fast.ok(); assert.equal(copy.textContent, 'Copied'); assert.equal(status.textContent, 'Copied to clipboard');
+  fire(); await slow.fail(); assert.equal(copy.textContent, 'Copy', 'a stale failure never shows');
+  // An early failure stays quiet while another copy is still in flight, and that copy wins.
+  slow = click(); fast = click();
+  await fast.fail(); assert.equal(copy.textContent, 'Copy'); assert.deepEqual(selected, []);
+  await slow.ok(); assert.equal(copy.textContent, 'Copied');
+  assert.equal(status.textContent, 'Copied to clipboard\u00a0', 'the same result is re-announced');
+  // A lone failure selects the command and says so.
+  fire(); await click().fail();
+  assert.equal(copy.textContent, 'Copy failed'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /copy it yourself/);
+  status.textContent = 'Copy failed. The command is selected so you can copy it yourself.'; // as if another button said it
+  fire(); await click().fail(); assert.match(status.textContent, /\u00a0$/, 'a repeat from any button is re-announced');
+  assert.deepEqual(written, Array(6).fill('brew install skeptic'));
   assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = el(); lone.dataset.copy = 'x';
-  runInNewContext(js, { document: { querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
+  runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
   assert.equal(lone.removed, true, 'copy buttons disappear when there is no clipboard');
+});
+
+test('copy degrades: no selection API gives an honest message; no status line keeps the buttons', async () => {
+  const copy = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, previousElementSibling: { tagName: 'PRE' }, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
+  const status = { textContent: '' };
+  runInNewContext(js, { getSelection: () => null, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
+    navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
+  await copy.listeners.click();
+  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /by hand/);
+  const kept = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
+  runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [kept] : [] }, navigator: { clipboard: { writeText: async () => {} } }, setTimeout() {}, clearTimeout() {} });
+  await kept.listeners.click();
+  assert.equal(kept.removed, undefined); assert.equal(kept.textContent, 'Copied');
+});
+
+test('the page has the status line copy results are announced in', () => {
+  const tags = home.match(/<[^>]*data-copy-status[^>]*>/g) || [];
+  assert.equal(tags.length, 1, 'exactly one status line');
+  assert.match(tags[0], /role="status"/);
 });
 
 test('build ships exactly the reviewed files, unchanged and free of private data', async () => {
