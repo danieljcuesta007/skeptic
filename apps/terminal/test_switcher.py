@@ -55,6 +55,14 @@ class SwitchTests(unittest.TestCase):
         self.assertEqual(calls, [(str(self.vault), 'vault')])
         self.assertIn('Vault-root session', summary['git']['limitation'])
 
+    def test_symlinked_vault_path_is_still_the_vault(self):
+        # live_sessions emits the vault's real path; ~/brain may be a symlink.
+        link = Path(self.tmp.name) / 'brain-link'; link.symlink_to(self.vault)
+        session = {'source_key': 'fixture', 'document': {'text': 'Continue selected work', 'sha256': '0' * 64, 'modified_at': '2026-10-12', 'kind': 'session'}}
+        with patch.object(self.state, 'grant', side_effect=lambda path, kind: self.fail('no repository grant') if kind == 'repository' else (str(self.vault), s.host.approve_root(str(self.vault), vault=True)[1])):
+            summary, _ = s.assemble(self.state, os.path.realpath(self.vault), str(link), session=session)
+        self.assertIn('Vault-root session', summary['git']['limitation'])
+
     def test_busy_writer_stops_before_handoff_review(self):
         import fcntl
         from types import SimpleNamespace

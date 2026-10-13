@@ -325,7 +325,7 @@ def assemble(state, cwd, vault, task='', picker=choose, session=None, target=Non
     conversation_only = bool(session and session.get("conversation_only"))
     # A vault-root conversation uses the existing bounded vault reader, never
     # requests a repository grant over the entire knowledge base.
-    vault_session = session is not None and Path(cwd) == Path(os.path.expanduser(vault))
+    vault_session = session is not None and os.path.realpath(cwd) == os.path.realpath(os.path.expanduser(vault))
     home_session = session is not None and (Path(cwd) == Path.home() or conversation_only or vault_session)
     project_gap = None
     try: repo = str(cwd) if home_session else repository(cwd)
