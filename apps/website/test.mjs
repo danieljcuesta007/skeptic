@@ -135,7 +135,9 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   // A lone failure selects the command and says so.
   fire(); await click().fail();
   assert.equal(copy.textContent, 'Copy failed'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /copy it yourself/);
-  assert.deepEqual(written, Array(5).fill('brew install skeptic'));
+  status.textContent = 'Copy failed. The command is selected so you can copy it yourself.'; // as if another button said it
+  fire(); await click().fail(); assert.match(status.textContent, /\u00a0$/, 'a repeat from any button is re-announced');
+  assert.deepEqual(written, Array(6).fill('brew install skeptic'));
   assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
@@ -144,8 +146,23 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   assert.equal(lone.removed, true, 'copy buttons disappear when there is no clipboard');
 });
 
+test('copy degrades: no selection API gives an honest message; no status line keeps the buttons', async () => {
+  const copy = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, previousElementSibling: { tagName: 'PRE' }, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
+  const status = { textContent: '' };
+  runInNewContext(js, { getSelection: () => null, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
+    navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
+  await copy.listeners.click();
+  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /by hand/);
+  const kept = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
+  runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [kept] : [] }, navigator: { clipboard: { writeText: async () => {} } }, setTimeout() {}, clearTimeout() {} });
+  await kept.listeners.click();
+  assert.equal(kept.removed, undefined); assert.equal(kept.textContent, 'Copied');
+});
+
 test('the page has the status line copy results are announced in', () => {
-  assert.match(home, /<p class="visually-hidden" role="status" data-copy-status><\/p>/);
+  const tags = home.match(/<[^>]*data-copy-status[^>]*>/g) || [];
+  assert.equal(tags.length, 1, 'exactly one status line');
+  assert.match(tags[0], /role="status"/);
 });
 
 test('build ships exactly the reviewed files, unchanged and free of private data', async () => {
