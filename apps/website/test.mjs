@@ -119,18 +119,24 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   assert.equal(tabs[1].attrs['aria-selected'], 'true'); assert.equal(panels['p-a'].hidden, true); assert.equal(panels['p-b'].hidden, false);
   tabs[1].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
   assert.equal(tabs[0].attrs['aria-selected'], 'true'); assert.equal(focused, tabs[0]);
-  const settle = async (click, i, how) => { how === 'ok' ? writes[i].ok() : writes[i].fail(new Error('denied')); await click; };
-  // Older click fails late, after a newer success: the success stands.
-  let older = copy.listeners.click(), newer = copy.listeners.click();
-  assert.equal(copy.textContent, 'Copy', 'pending clicks show the plain label');
-  await settle(newer, 1, 'ok'); await settle(older, 0, 'fail');
-  assert.equal(copy.textContent, 'Copied');
-  // Older click succeeds late, after a newer failure: the failure stands.
-  older = copy.listeners.click(); newer = copy.listeners.click();
-  await settle(newer, 3, 'fail'); await settle(older, 2, 'ok');
-  assert.equal(copy.textContent, 'Select and copy');
-  assert.deepEqual(written, Array(4).fill('brew install skeptic'));
-  assert.equal(timers.size, 1, 'only the newest reset timer is left running');
+  const click = () => { const done = copy.listeners.click(); const w = writes.at(-1); return { ok: async () => { w.ok(); await done; }, fail: async () => { w.fail(new Error('denied')); await done; } }; };
+  // A late failure never hides an earlier success: the command is on the clipboard.
+  let first = click(), second = click();
+  await first.ok(); assert.equal(copy.textContent, 'Copied');
+  await second.fail(); assert.equal(copy.textContent, 'Copied');
+  // The reverse order ends the same way, and a pending click doesn't blank the label.
+  [...timers.values()].at(-1)(); timers.clear();
+  first = click(); second = click();
+  assert.equal(copy.textContent, 'Copy');
+  await second.fail(); assert.equal(copy.textContent, 'Copy', 'no failure shown while another copy may still land');
+  await first.ok(); assert.equal(copy.textContent, 'Copied');
+  // Every copy failing says so.
+  [...timers.values()].at(-1)(); timers.clear();
+  await click().fail(); assert.equal(copy.textContent, 'Copy failed');
+  [...timers.values()].at(-1)(); timers.clear();
+  await click().ok(); assert.equal(copy.textContent, 'Copied', 'a fresh success after the reset');
+  assert.deepEqual(written, Array(6).fill('brew install skeptic'));
+  assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = el(); lone.dataset.copy = 'x';
