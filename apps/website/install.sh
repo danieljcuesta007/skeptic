@@ -17,7 +17,7 @@
 set -eu
 
 VERSION="0.1.0"
-SHA256="UNRELEASED"
+SHA256="9988c22478bf3a9ea4cbed29e949e07320bc89401b7f234b8bf3f4e5dbdd22bf"
 URL="${SKEPTIC_URL:-https://github.com/danieljcuesta007/skeptic/releases/download/v$VERSION/skeptic-$VERSION.tar.gz}"  # override only for testing; the checksum still applies
 PREFIX="${SKEPTIC_HOME:-$HOME/.local/share/skeptic}"
 
