@@ -112,16 +112,24 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   const written = [];
   const document = { querySelectorAll: sel => sel === '[data-tabs]' ? [root] : sel === '[data-copy]' ? [copy] : [] };
   const timers = new Map(); let next = 0;
-  let release; const slow = new Promise(r => { release = r; });
-  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); await slow; } } },
+  const writes = [];
+  runInNewContext(js, { document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
     setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   tabs[1].listeners.click();
   assert.equal(tabs[1].attrs['aria-selected'], 'true'); assert.equal(panels['p-a'].hidden, true); assert.equal(panels['p-b'].hidden, false);
   tabs[1].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
   assert.equal(tabs[0].attrs['aria-selected'], 'true'); assert.equal(focused, tabs[0]);
-  const clicks = Promise.all([copy.listeners.click(), copy.listeners.click()]); // overlap a slow clipboard write
-  release(); await clicks;
-  assert.deepEqual(written, ['brew install skeptic', 'brew install skeptic']); assert.equal(copy.textContent, 'Copied');
+  const settle = async (click, i, how) => { how === 'ok' ? writes[i].ok() : writes[i].fail(new Error('denied')); await click; };
+  // Older click fails late, after a newer success: the success stands.
+  let older = copy.listeners.click(), newer = copy.listeners.click();
+  assert.equal(copy.textContent, 'Copy', 'pending clicks show the plain label');
+  await settle(newer, 1, 'ok'); await settle(older, 0, 'fail');
+  assert.equal(copy.textContent, 'Copied');
+  // Older click succeeds late, after a newer failure: the failure stands.
+  older = copy.listeners.click(); newer = copy.listeners.click();
+  await settle(newer, 3, 'fail'); await settle(older, 2, 'ok');
+  assert.equal(copy.textContent, 'Select and copy');
+  assert.deepEqual(written, Array(4).fill('brew install skeptic'));
   assert.equal(timers.size, 1, 'only the newest reset timer is left running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
