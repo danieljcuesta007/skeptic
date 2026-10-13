@@ -110,27 +110,34 @@ test('site.js: tabs switch by click and arrow keys; copy writes the command', as
   const root = { querySelectorAll: () => tabs, querySelector: sel => panels[sel.slice(1)] };
   const copy = el(); copy.dataset.copy = 'brew install skeptic';
   const written = [];
-  const document = { querySelectorAll: sel => sel === '[data-tabs]' ? [root] : sel === '[data-copy]' ? [copy] : [] };
+  const document = { querySelector: sel => sel === '[data-copy-status]' ? status : null, querySelectorAll: sel => sel === '[data-tabs]' ? [root] : sel === '[data-copy]' ? [copy] : [] };
   const timers = new Map(); let next = 0;
   const writes = [];
-  runInNewContext(js, { document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
+  let clock = 1000; const selected = []; const code = { tag: 'pre' }; copy.previousElementSibling = code;
+  const status = { textContent: '' };
+  runInNewContext(js, { getSelection: () => ({ selectAllChildren: el => selected.push(el) }), Date: { now: () => clock }, document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
     setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   tabs[1].listeners.click();
   assert.equal(tabs[1].attrs['aria-selected'], 'true'); assert.equal(panels['p-a'].hidden, true); assert.equal(panels['p-b'].hidden, false);
   tabs[1].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
   assert.equal(tabs[0].attrs['aria-selected'], 'true'); assert.equal(focused, tabs[0]);
-  const settle = async (click, i, how) => { how === 'ok' ? writes[i].ok() : writes[i].fail(new Error('denied')); await click; };
-  // Older click fails late, after a newer success: the success stands.
-  let older = copy.listeners.click(), newer = copy.listeners.click();
-  assert.equal(copy.textContent, 'Copy', 'pending clicks show the plain label');
-  await settle(newer, 1, 'ok'); await settle(older, 0, 'fail');
-  assert.equal(copy.textContent, 'Copied');
-  // Older click succeeds late, after a newer failure: the failure stands.
-  older = copy.listeners.click(); newer = copy.listeners.click();
-  await settle(newer, 3, 'fail'); await settle(older, 2, 'ok');
-  assert.equal(copy.textContent, 'Select and copy');
-  assert.deepEqual(written, Array(4).fill('brew install skeptic'));
-  assert.equal(timers.size, 1, 'only the newest reset timer is left running');
+  const click = () => { const done = copy.listeners.click(); const w = writes.at(-1); return { ok: async () => { w.ok(); await done; }, fail: async () => { w.fail(new Error('denied')); await done; } }; };
+  const fire = () => { [...timers.values()].at(-1)(); timers.clear(); };
+  // A slow failure that settles after a newer success (even after the reset) changes nothing.
+  let slow = click(), fast = click();
+  clock += 10; await fast.ok(); assert.equal(copy.textContent, 'Copied'); assert.equal(status.textContent, 'Copied to clipboard');
+  fire(); assert.equal(copy.textContent, 'Copy');
+  clock += 5000; await slow.fail(); assert.equal(copy.textContent, 'Copy', 'a stale failure never shows');
+  assert.deepEqual(selected, []);
+  // A failure with no success since it began selects the command and says how to copy.
+  clock += 10; await click().fail();
+  assert.equal(copy.textContent, 'Press \u2318C'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /Command C/);
+  // A pending click never hides a later success, whatever order they settle in.
+  fire(); slow = click(); fast = click();
+  clock += 10; await fast.fail(); assert.equal(copy.textContent, 'Press \u2318C');
+  clock += 10; await slow.ok(); assert.equal(copy.textContent, 'Copied');
+  assert.deepEqual(written, Array(5).fill('brew install skeptic'));
+  assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = el(); lone.dataset.copy = 'x';

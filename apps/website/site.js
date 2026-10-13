@@ -23,18 +23,30 @@ function initTabs(root) {
   });
 }
 
-function initCopy(button, clipboard) {
-  const label = button.textContent; // read once, so a double click can't save "Copied" as the label
-  let timer, latest = 0;
-  button.addEventListener('click', async () => {
-    const mine = ++latest;   // only the newest click may change the button
-    clearTimeout(timer);
-    button.textContent = label; // never left saying "Copied" for a write that hasn't happened
-    let text = 'Copied';
-    try { await clipboard.writeText(button.dataset.copy); } catch { text = 'Select and copy'; }
-    if (mine !== latest) return; // a newer click took over while this write was pending
+// Every click copies the same text, so a failure only matters if no copy has
+// succeeded since that click began. On a real failure the command is selected,
+// so Command-C still works. Results are announced once through the status line.
+function initCopy(button, clipboard, status, select, now = Date.now) {
+  const label = button.textContent;
+  let timer, lastSuccess = -Infinity;
+  const show = (text, said) => {
     button.textContent = text;
+    if (status) status.textContent = said;
+    clearTimeout(timer);
     timer = setTimeout(() => { button.textContent = label; }, 1600);
+  };
+  button.addEventListener('click', async () => {
+    const started = now();
+    try {
+      await clipboard.writeText(button.dataset.copy);
+      lastSuccess = now();
+      show('Copied', 'Copied to clipboard');
+    } catch {
+      if (lastSuccess >= started) return; // another click already put it on the clipboard
+      const code = button.previousElementSibling;
+      if (code && select) select(code);
+      show('Press \u2318C', 'Copy failed. The command is selected; press Command C.');
+    }
   });
 }
 
@@ -51,7 +63,9 @@ function initReplay(root) {
 if (typeof document !== 'undefined' && document.querySelectorAll) {
   document.querySelectorAll('[data-tabs]').forEach(initTabs);
   const clipboard = typeof navigator !== 'undefined' && navigator.clipboard;
-  document.querySelectorAll('[data-copy]').forEach(b => clipboard ? initCopy(b, clipboard) : b.remove());
+  const status = document.querySelector && document.querySelector('[data-copy-status]');
+  const select = el => { const sel = typeof getSelection === 'function' && getSelection(); if (sel) sel.selectAllChildren(el); };
+  document.querySelectorAll('[data-copy]').forEach(b => clipboard ? initCopy(b, clipboard, status, select) : b.remove());
   document.querySelectorAll('[data-replay]').forEach(r => { r.classList.add('playing'); initReplay(r); });
 }
 
