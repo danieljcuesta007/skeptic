@@ -1,34 +1,37 @@
-// Verify new UX regressions reject faults without altering source files.
-import { mkdtemp, cp, readFile, writeFile, rm } from 'node:fs/promises';
+// Plant one fault per case in a scratch copy and confirm the named test rejects it.
+import { mkdtemp, cp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 const cases = [
- ['colored favicon','website ships only monochrome colors with contrasting secondary controls','favicon.svg', s=>s.replace('fill="#000000"','fill="#ff2800"')],
- ['invisible primary CTA','monochrome primary CTA meets AAA contrast and preserves interaction states','style.css', s=>s.replace('color:#fff; border-color:var(--black); font-size:19px','color:#000; border-color:var(--black); font-size:19px')],
- ['missing architecture icon','homepage architecture has decorative inline icons and responsive cards','index.html', s=>s.replace(/<svg class="architecture-icon"[\s\S]*?<\/svg>/,'')],
- ['external tracking asset','production package contains only reviewed local assets and inert signup','guide.html', s=>s.replace('</head>','<script src="https://analytics.example/tracker.js"></script></head>')],
- ['unlabeled architecture','architecture diagrams retain accessible descriptions and truthful capability status','index.html', s=>s.replace('aria-labelledby="architecture-caption"','')],
- ['false learning status','architecture diagrams retain accessible descriptions and truthful capability status','index.html', s=>s.replace('Preference learning</strong><span>Planned','Preference learning</strong><span>Implemented')],
- ['broken guide destination','all page and fragment links resolve with unique IDs per page','index.html', s=>s.replace('guide.html#onboarding','guide.html#missing-step43')],
- ['repeated homepage section','homepage keeps six focused sections and full previews remain on the guide','index.html', s=>s.replace('</main>','<section id="repeated"><h2>Repeat</h2></section></main>')],
- ['overflow concealed','compact CTA and responsive shrink rules never mask overflow','style.css', s=>s+'\nbody { overflow-x:hidden; }\n'],
- ['extra primary heading','each page has one primary heading and a labeled navigation and skip link','guide.html', s=>s.replace('</main>','<h1>Repeated title</h1></main>')],
- ['oversized mobile CTA','compact CTA and responsive shrink rules never mask overflow','style.css', s=>s.replace('.cta-actions .button { width:fit-content; }','.cta-actions .button { width:100%; }')]
+ ['broken fragment link', 'internal links and fragments resolve, IDs are unique per page', 'index.html', s => s.replace('href="#compare"', 'href="#nowhere"')],
+ ['third-party tracker', 'local assets exist and nothing loads from another origin', 'index.html', s => s.replace('</head>', '<script src="https://analytics.example/t.js"></script></head>')],
+ ['link to an unknown site', 'local assets exist and nothing loads from another origin', 'legal.html', s => s.replace('https://github.com/danieljcuesta007/skeptic/issues', 'https://example.com/issues')],
+ ['inline style blocked by CSP', 'markup works under the strict content security policy', 'index.html', s => s.replace('<h1 id="hero-title">', '<h1 id="hero-title" style="color:#fff">')],
+ ['CSP loosened', 'markup works under the strict content security policy', '_headers', s => s.replace("connect-src 'none'", "connect-src *")],
+ ['second h1', 'each page has one h1, a skip link and labelled navigation', 'legal.html', s => s.replace('</main>', '<h1>Again</h1></main>')],
+ ['tab without panel', 'install tabs are wired both ways', 'index.html', s => s.replace('aria-labelledby="t-curl"', 'aria-labelledby="t-none"')],
+ ['affiliation note dropped', 'claims stay honest', 'legal.html', s => s.replace('is not affiliated with', 'works with')],
+ ['comparison undated', 'claims stay honest', 'index.html', s => s.replace('as of October 2026', 'today')],
+ ['brand colour creeps in', 'palette is monochrome', 'style.css', s => s.replace('--grey:#8c8c8c', '--grey:#3f8a4f')],
+ ['unpack before checksum', 'installer verifies the download before unpacking and never escalates', 'install.sh', s => s.replace('mkdir -p "$PREFIX/$VERSION"\ntar -xzf', 'tar -xzf').replace('curl -fsSL "$URL" -o "$tmp/skeptic.tar.gz" || die "download failed: $URL"', 'curl -fsSL "$URL" -o "$tmp/skeptic.tar.gz" || die "download failed: $URL"\nmkdir -p "$PREFIX/$VERSION"\ntar -xzf "$tmp/skeptic.tar.gz" -C "$PREFIX/$VERSION" --strip-components 1')],
+ ['formula out of step', 'install script and Homebrew formula point at the same release', '../../Formula/skeptic.rb', s => s.replace('v0.1.0/skeptic-0.1.0', 'v0.0.9/skeptic-0.0.9')],
+ ['arrow keys ignored', 'site.js: tabs switch by click and arrow keys; copy writes the command', 'site.js', s => s.replace("e.key === 'ArrowRight' ? 1", "e.key === 'Nope' ? 1")],
 ];
-for (const [name,expected,file,mutate] of cases) {
- const scratch=await mkdtemp(join(tmpdir(),'skeptic-ux-'));
- try {
-  await cp(new URL('.',import.meta.url),scratch,{recursive:true,filter:src=>!src.split('/').includes('dist')});
-  const target=join(scratch,file); const before=await readFile(target,'utf8');
-  const after=mutate(before); if(after===before) throw Error(`Fault not planted: ${name}`);
-  await writeFile(target,after);
-  const build=spawnSync(process.execPath,['build.mjs'],{cwd:scratch,encoding:'utf8'});
-  if(build.status!==0) throw Error(`Scratch build failed: ${name}`);
-  const result=spawnSync(process.execPath,['--test','--test-reporter=tap','test.mjs'],{cwd:scratch,encoding:'utf8'});
-  if(result.error||result.status===null) throw result.error||Error('Runner failed');
-  if(result.status===0 || !result.stdout.split("\n").some(line=>line.startsWith("not ok ") && line.endsWith(expected))) throw Error(`Expected regression did not reject fault: ${name}`);
-  console.log(`Caught UX fault: ${name}`);
- } finally { await rm(scratch,{recursive:true,force:true}); }
+for (const [name, expected, file, mutate] of cases) {
+  const scratch = await mkdtemp(join(tmpdir(), 'skeptic-site-'));
+  try {
+    const site = join(scratch, 'apps/website');
+    await mkdir(site, { recursive: true });
+    await cp(new URL('.', import.meta.url), site, { recursive: true, filter: src => !src.split('/').includes('dist') && !src.split('/').includes('node_modules') });
+    await cp(new URL('../../Formula', import.meta.url), join(scratch, 'Formula'), { recursive: true });
+    const target = join(site, file), before = await readFile(target, 'utf8'), after = mutate(before);
+    if (after === before) throw Error(`Fault not planted: ${name}`);
+    await writeFile(target, after);
+    if (spawnSync(process.execPath, ['build.mjs'], { cwd: site }).status !== 0) throw Error(`Scratch build failed: ${name}`);
+    const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'test.mjs'], { cwd: site, encoding: 'utf8' });
+    if (result.status === 0 || !result.stdout.split('\n').some(l => l.startsWith('not ok ') && l.endsWith(expected))) throw Error(`Not caught: ${name}`);
+    console.log(`Caught: ${name}`);
+  } finally { await rm(scratch, { recursive: true, force: true }); }
 }
-console.log(`${cases.length}/${cases.length} UX mutations caught; source files unchanged.`);
+console.log(`${cases.length}/${cases.length} site mutations caught; source files unchanged.`);
