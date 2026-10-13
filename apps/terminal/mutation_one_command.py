@@ -11,7 +11,7 @@ faults=[
  ('candidate_promoted_to_confirmed','open_sessions.py',"('UNCONFIRMED' if candidate else 'UNMATCHED')","('CONFIRMED' if candidate else 'UNMATCHED')",'test_candidate_identification.CandidateIdentificationTests.test_offline_recognizable_context_before_association'),
  ('native_pid_mismatch','open_sessions.py',"or data['pid'] != pid",'or False','NativeMetadataTests.test_exact_pid_record_only_and_never_automatic_proof'),
  ('source_append_accepted','switcher.py',"if adapter.verify(access, snapshot)['appended_bytes']: raise host.Denied('Source appended; refresh the review before launch')", "if False: raise host.Denied('Source appended; refresh the review before launch')",'ContinuationTests.test_source_append_during_send_refuses_launch'),
- ('writer_gate_bypassed','switcher.py',"if input('After checking the original Claude window and other project writers, type project-clear to continue: ').strip() != 'project-clear':", "if False:",'ContinuationTests.test_writer_decline_never_launches'),
+ ('writer_gate_bypassed','switcher.py',"if approval not in ('project-clear', 'project-clear send'):", "if False:",'ContinuationTests.test_writer_decline_never_launches'),
  ('reservation_bypassed','switcher.py',"def tracked_launch(state, model, cwd, packet, vault, task):", "def tracked_launch(state, model, cwd, packet, vault, task):\n    return _tracked_launch(state, model, cwd, packet, vault, task)",'ContinuationTests.test_cooperative_writer_reservation_refuses_second_launch'),
  ('bare_entry_preview_only','switcher.py',"['sessions', 'open', '--continue', '--with', 'codex', '--project', str(Path.home())]", "['sessions', 'open', '--with', 'codex', '--project', str(Path.home())]",'ContinuationTests.test_bare_entry_routes_to_live_continuation_without_history'),
 ]

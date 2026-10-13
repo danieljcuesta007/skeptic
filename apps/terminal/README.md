@@ -547,3 +547,38 @@ journals and current/selected/all managed scopes. Temporary state/projects only;
 sources are excluded and native recovery acknowledgement is unsupported. New engine PTY
 acceptance is blocked by this session's socket sandbox. See [current commands and exact
 limits](MANAGED.md). Historical Step 43H results do not validate this changed implementation.
+
+### Compacted-session continuation
+
+Selected-session packets reserve space for the latest compaction checkpoint alongside
+recent human requests and the last visible work. A complete compacted root is not a
+missing-ancestry error; summaries remain attributed assistant claims. Earlier branch
+requests remain historical evidence. Recent follow-ups and pending tool tasks take
+priority over older tool activity in the remaining packet budget. The receiving agent
+must inspect the cited approved source and current files before asking the owner to
+repeat context, verify completion, and report completed work without inventing a task.
+
+After persistent access permissions have been granted and the packet displayed,
+`project-clear send` combines the writer-safety attestation and approval to send that
+exact packet in one review action. `project-clear` retains separate send review.
+Source append/change, revoked access, changed context and concurrent writer checks
+still block launch. The original provider session stays open. This does not bypass
+first-use access, repository scope or provider-specific approval requirements.
+
+Claude Code's own compaction wrapper ("continue without asking the user …") is
+stripped from summaries before they enter a packet; historical text never instructs the
+receiver. Bare tool calls and results carry no content, so they are tallied by tool
+name instead of listed, and a long tool run can no longer push the latest requests and
+progress notes out of the extraction window. Evidence is listed in source order, with
+the files used by the latest tool calls named once.
+
+### Widget route (`--widget-switch`)
+
+Normal use is two decisions: pick the window and engine in the Vitals widget, then click
+**Switch** in the native dialog, which names the conversation, its last request and the
+project. Picking an exact conversation in the widget approves reading that one
+transcript; directory metadata, repository/vault scopes and the outgoing packet keep
+their own approvals, and `--fresh-session-approval` restores the typed prompt. A
+finished session with no single repository (home-started, multi-repo, or its worktree
+since removed) continues from the notes vault (`~/brain`) with bounded vault reads
+instead of showing no Switch at all; folders outside it need the new AI's own approval.
