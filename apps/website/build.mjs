@@ -1,4 +1,6 @@
-import { mkdir, copyFile } from 'node:fs/promises';
+import { mkdir, copyFile, rm } from 'node:fs/promises';
+export const files = ['index.html','legal.html','style.css','site.js','favicon.svg','install.sh','_headers'];
+await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
-for (const file of ['index.html','guide.html','style.css','app.js','favicon.svg','onboarding.js','wizard-state.js','_headers']) await copyFile(file, `dist/${file}`);
-console.log('Production static build: dist/ (8 files). No dependencies or network.');
+for (const file of files) await copyFile(file, `dist/${file}`);
+console.log(`Production static build: dist/ (${files.length} files). No dependencies or network.`);

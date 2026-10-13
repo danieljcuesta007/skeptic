@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skeptic: privacy, license and trademarks</title>
+<meta name="description" content="How Skeptic and this website handle your data, Skeptic's MIT license, trademarks and credits.">
+<meta name="theme-color" content="#0b0b0b">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="doc-page">
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+<path id="hood-path" fill-rule="evenodd" d="M50 8 C23 23 15 43 20 68 L8 92 Q50 80 92 92 L80 68 C85 43 77 23 50 8 Z M50 32 C35 41 31 49 34 61 Q38 70 50 75 Q62 70 66 61 C69 49 65 41 50 32 Z"/>
+</defs></svg>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="Skeptic home">
+    <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><use href="#hood-path" fill="currentColor"/></svg>
+    <span>Skeptic</span>
+  </a>
+  <nav aria-label="Main navigation">
+    <a href="index.html#how">How it works</a>
+    <a href="index.html#compare">Compare</a>
+    <a class="nav-install" href="index.html#install">Install</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1" class="doc">
+  <h1>Privacy, license and trademarks</h1>
+  <p class="doc-date">Last updated 12 October 2026</p>
+
+  <h2 id="privacy">Privacy</h2>
+  <h3>The Skeptic app</h3>
+  <ul>
+    <li>Skeptic runs on your Mac. It has no account, no server and no telemetry, and it makes no network calls.</li>
+    <li>It reads only the folders you approve, and only when you switch. Approvals and project mappings are stored on your Mac in <code>~/.skeptic-cli</code>. Remove an approval with <code>skeptic permissions revoke PATH</code>, or delete that folder to remove everything.</li>
+    <li>An optional activity log is off by default. If you turn it on, it stays in that same folder and is never sent anywhere.</li>
+    <li>When you switch, Skeptic gives the handoff to the engine you picked (for example Codex). What that engine does with it is governed by that provider's own terms and privacy policy.</li>
+  </ul>
+  <h3>This website</h3>
+  <ul>
+    <li>No cookies, analytics, trackers, forms or third-party scripts. The page's security policy blocks them outright.</li>
+    <li>The site is hosted on Cloudflare Pages, which, like any web host, handles standard request data (such as your IP address) to serve and protect the site.</li>
+  </ul>
+
+  <h2 id="license">License</h2>
+  <p>Skeptic is open source under the MIT license. You may use, copy, modify and share it, including commercially, as long as the copyright notice comes with it. It is provided "as is", without warranty of any kind. The full text is in the <a href="https://github.com/danieljcuesta007/skeptic/blob/main/LICENSE" rel="noopener">LICENSE file</a>.</p>
+
+  <h2 id="trademarks">Trademarks and affiliation</h2>
+  <p>Claude and Claude Code are trademarks of Anthropic. Codex is a trademark of OpenAI. Hermes Agent is a product of Nous Research. They're named here only to say what Skeptic works with. Skeptic is an independent project and is not affiliated with, sponsored by or endorsed by any of them.</p>
+
+  <h2 id="credits">Credits</h2>
+  <p>Designed and built by Daniel Cuesta under DC Labs, with Claude. Set in your system's own fonts. No third-party code ships with the website.</p>
+
+  <h2 id="contact">Contact</h2>
+  <p>Questions, bugs and security reports: open an issue on <a href="https://github.com/danieljcuesta007/skeptic/issues" rel="noopener">GitHub</a>. For a security problem, use <em>Report a vulnerability</em> on the repository's Security tab instead, so the details stay private.</p>
+</main>
+<footer class="site-footer">
+  <div class="footer-brand">
+    <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><use href="#hood-path" fill="currentColor"/></svg>
+    <p><strong>Skeptic</strong><br>A DC Labs product</p>
+  </div>
+  <nav aria-label="Footer">
+    <a href="index.html">Home</a>
+    <a href="install.sh">Install script</a>
+    <a href="https://github.com/danieljcuesta007/skeptic" rel="noopener">Source</a>
+  </nav>
+  <p class="fineprint">© 2026 Daniel Cuesta. MIT licensed.</p>
+</footer>
+</body>
+</html>
