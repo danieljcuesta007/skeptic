@@ -14,8 +14,8 @@ preview the website. Build output remains static, ready for Cloudflare Pages.
 npm ci
 npm run typecheck
 npm run build
-npm test                    # 22 regressions, including canvas lifecycle
-node mutation-check.mjs      # 27 planted faults, all expected to fail
+npm test                    # 24 regressions, including canvas lifecycle
+node mutation-check.mjs      # 29 planted faults, all expected to fail
 npm run preview              # http://127.0.0.1:4173, with production CSP
 ```
 
@@ -74,3 +74,10 @@ npx wrangler pages deploy dist --project-name skeptic
 
 Deploying is deliberate and separate from local integration; the matching GitHub
 release must exist so the install commands work.
+
+The footer opts into `scrollReveal`: its wordmark moves below the clipping edge
+as you scroll back up and rises into view as you scroll down. Scroll updates are
+coalesced into one animation frame, and listeners/frames are cleaned up on unmount.
+Reduced motion keeps the wordmark static. The masthead retains a static light crop
+with enough of the lowercase p stem visible to read it. The header uses the same
+halftone texture and lowercase sans wordmark with an outlined install link.

@@ -42,8 +42,8 @@ test('landing is rendered without JavaScript, with correct landmarks and real li
 });
 
 const lifecycleBundle = await build({ entryPoints: ['components/ui/halftone-wordmark-footer.tsx'], bundle: true, platform: 'node', format: 'cjs', write: false, external: ['react', 'react/jsx-runtime'], loader: { '.css': 'empty' } });
-function mount({ reduced = false, interactive = true, crop = 0.2 } = {}) {
-  const baselines = [];
+function mount({ reduced = false, interactive = true, crop = 0.2, scrollReveal = false } = {}) {
+  const baselines = []; const properties = new Map(); let top = 100;
   const effects = [], frames = new Map(), listeners = new Map(), observers = [];
   let ref = 0, frameId = 0;
   const noop = () => {};
@@ -51,21 +51,25 @@ function mount({ reduced = false, interactive = true, crop = 0.2 } = {}) {
     measureText:()=>({width:100, actualBoundingBoxAscent:10}),
     getImageData:()=>({data:new Uint8ClampedArray(30*30*4).fill(255)}), createImageData:()=>({data:new Uint8ClampedArray(256*256*4)}), createPattern:()=>null };
   const canvas = { getContext:()=>ctx, getBoundingClientRect:()=>({left:0,top:0}) };
-  const target = prefix => ({ addEventListener:(type,fn)=>listeners.set(prefix+type,fn), removeEventListener:type=>listeners.delete(prefix+type) });
-  const root = { ...target('root:'), style:{setProperty:noop}, getBoundingClientRect:()=>({width:30,height:30}) };
+  const callbacks = new Map();
+  const target = prefix => ({
+    addEventListener:(type,fn)=>{ const key=prefix+type; if(!callbacks.has(key)) callbacks.set(key,new Set()); callbacks.get(key).add(fn); listeners.set(key,event=>callbacks.get(key)?.forEach(f=>f(event))); },
+    removeEventListener:(type,fn)=>{const key=prefix+type; callbacks.get(key)?.delete(fn); if(!callbacks.get(key)?.size) listeners.delete(key);}
+  });
+  const root = { ...target('root:'), style:{setProperty:(key,value)=>properties.set(key,value),removeProperty:key=>properties.delete(key)}, getBoundingClientRect:()=>({width:30,height:30,top}) };
   const motion = { ...target('motion:'), matches:reduced };
   const document = { ...target('doc:'), hidden:false, createElement:()=>({...canvas}) };
-  const window = { matchMedia:()=>motion, devicePixelRatio:1 };
+  const window = { ...target('window:'), innerHeight:100, matchMedia:()=>motion, devicePixelRatio:1 };
   const react = { ...createRequire(import.meta.url)('react'), useRef:value=>({current:ref++===0?root:ref===2?canvas:value}), useEffect:fn=>effects.push(fn) };
   const require = name => name === 'react' ? react : createRequire(import.meta.url)(name);
   class Observer { constructor(callback) { this.callback=callback; observers.push(this); } observe() {} disconnect() { this.disconnected=true; } }
   const module = { exports:{} };
   new Function('module','exports','require','window','document','ResizeObserver','IntersectionObserver','requestAnimationFrame','cancelAnimationFrame','performance', lifecycleBundle.outputFiles[0].text)(
     module,module.exports,require,window,document,Observer,Observer,fn=>{frames.set(++frameId,fn);return frameId;},id=>frames.delete(id),{now:()=>0});
-  module.exports.default({interactive,grain:0,crop});
+  module.exports.default({interactive,grain:0,crop,scrollReveal});
   const cleanup = effects.map(fn=>fn()).filter(Boolean);
   const flush = now => { const pending=[...frames.values()];frames.clear();pending.forEach(fn=>fn(now)); };
-  return {baselines,frames,listeners,motion,document,observers,flush,unmount:()=>cleanup.forEach(fn=>fn())};
+  return {setTop:value=>{top=value},properties,baselines,frames,listeners,motion,document,observers,flush,unmount:()=>cleanup.forEach(fn=>fn())};
 }
 test('canvas sleeps at rest, ignores reduced-motion input, and releases listeners on unmount', () => {
   for (const options of [{reduced:true},{interactive:false}]) {
@@ -100,4 +104,18 @@ test('negative crop lifts the baseline so lowercase descenders remain visible', 
   assert.ok(env.baselines.length > 0);
   assert.ok(env.baselines.every(y => y < 30), 'baseline must sit above the canvas bottom');
   env.unmount();
+});
+
+test('footer scroll reveal swallows on scroll up, coalesces work and respects reduced motion', () => {
+  const env = mount({scrollReveal:true}); env.flush(1000);
+  assert.equal(env.properties.get('--hwf-scroll-shift'),'9px');
+  env.setTop(70); env.listeners.get('window:scroll')(); env.flush(1016);
+  assert.equal(env.properties.get('--hwf-scroll-shift'),'0px');
+  env.setTop(85); env.listeners.get('window:scroll')(); env.listeners.get('window:scroll')();
+  assert.equal(env.frames.size,1,'one update for a burst of scroll events'); env.flush(1032);
+  assert.equal(env.properties.get('--hwf-scroll-shift'),'4.5px','scrolling up pushes the wordmark below its clipping edge');
+  env.motion.matches=true; env.listeners.get('motion:change')(); env.flush(1048);
+  assert.equal(env.properties.get('--hwf-scroll-shift'),'0px','live reduced-motion setting removes scroll movement');
+  env.unmount(); assert.equal(env.listeners.size,0); assert.equal(env.frames.size,0);
+  assert.equal(env.properties.has('--hwf-scroll-shift'),false);
 });

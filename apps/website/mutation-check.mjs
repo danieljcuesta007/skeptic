@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 const cases = [
+ ['scroll reveal ignores reduced motion', 'footer scroll reveal swallows on scroll up, coalesces work and respects reduced motion', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('const shift = motion.matches ? 0 :', 'const shift = false ? 0 :')],
+ ['scroll reveal moves in reverse', 'footer scroll reveal swallows on scroll up, coalesces work and respects reduced motion', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('(1 - progress) * Math.min(rect.width', 'progress * Math.min(rect.width')],
  ['descender clipped again', 'negative crop lifts the baseline so lowercase descenders remain visible', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('Math.max(-0.4, Math.min(0.6, o.crop))', 'Math.max(0, Math.min(0.6, o.crop))')],
  ['homepage reference sections return', 'homepage keeps the pitch compact and routes reference content to the guide', 'index.html', s => s.replace('</main>', '<section class="faq"></section></main>')],
  ['broken fragment link', 'internal links and fragments resolve, IDs are unique per page', 'index.html', s => s.replace('href="guide.html#compare"', 'href="#nowhere"')],
