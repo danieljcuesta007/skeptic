@@ -58,7 +58,7 @@ function mount({ reduced = false, interactive = true, crop = 0.2, scrollReveal =
   });
   const root = { ...target('root:'), style:{setProperty:(key,value)=>properties.set(key,value),removeProperty:key=>properties.delete(key)}, getBoundingClientRect:()=>({width:30,height:30,top}) };
   const motion = { ...target('motion:'), matches:reduced };
-  const document = { ...target('doc:'), hidden:false, createElement:()=>({...canvas}) };
+  const document = { ...target('doc:'), hidden:false, querySelector:()=>null, createElement:()=>({...canvas}) };
   const window = { ...target('window:'), innerHeight:100, matchMedia:()=>motion, devicePixelRatio:1 };
   const react = { ...createRequire(import.meta.url)('react'), useRef:value=>({current:ref++===0?root:ref===2?canvas:value}), useEffect:fn=>effects.push(fn) };
   const require = name => name === 'react' ? react : createRequire(import.meta.url)(name);
@@ -106,14 +106,14 @@ test('negative crop lifts the baseline so lowercase descenders remain visible', 
   env.unmount();
 });
 
-test('footer scroll reveal swallows on scroll up, coalesces work and respects reduced motion', () => {
+test('opening wordmark stays behind the advancing page, coalesces work and respects reduced motion', () => {
   const env = mount({scrollReveal:true}); env.flush(1000);
-  assert.equal(env.properties.get('--hwf-scroll-shift'),'-30px');
-  env.setTop(70); env.listeners.get('window:scroll')(); env.flush(1016);
   assert.equal(env.properties.get('--hwf-scroll-shift'),'0px');
-  env.setTop(85); env.listeners.get('window:scroll')(); env.listeners.get('window:scroll')();
+  env.setTop(-15); env.listeners.get('window:scroll')(); env.flush(1016);
+  assert.equal(env.properties.get('--hwf-scroll-shift'),'15px');
+  env.setTop(-30); env.listeners.get('window:scroll')(); env.listeners.get('window:scroll')();
   assert.equal(env.frames.size,1,'one update for a burst of scroll events'); env.flush(1032);
-  assert.equal(env.properties.get('--hwf-scroll-shift'),'-15px','artwork counteracts page movement so the page edge covers it');
+  assert.equal(env.properties.get('--hwf-scroll-shift'),'30px','opening artwork counteracts page movement while the following section covers it');
   env.motion.matches=true; env.listeners.get('motion:change')(); env.flush(1048);
   assert.equal(env.properties.get('--hwf-scroll-shift'),'0px','live reduced-motion setting removes scroll movement');
   env.unmount(); assert.equal(env.listeners.size,0); assert.equal(env.frames.size,0);

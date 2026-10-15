@@ -75,10 +75,8 @@ npx wrangler pages deploy dist --project-name skeptic
 Deploying is deliberate and separate from local integration; the matching GitHub
 release must exist so the install commands work.
 
-The footer opts into `scrollReveal`: its artwork stays anchored to the viewport bottom
-while the page edge moves across it, covering it on scroll up and revealing it
-on scroll down. Scroll updates are
-coalesced into one animation frame, and listeners/frames are cleaned up on unmount.
-Reduced motion keeps the wordmark static. The masthead retains a static light crop
-with enough of the lowercase p stem visible to read it. The header uses the same
-halftone texture and lowercase sans wordmark with an outlined install link.
+The opening masthead opts into `scrollReveal`: its artwork stays pinned below the
+sticky header as the following page section slides over it from below. The footer
+is static with its light crop. Updates coalesce into one animation frame; reduced
+motion disables pinning, and listeners/frames clean up on unmount. The dotted hood
+favicon and matching halftone header remain in place.
