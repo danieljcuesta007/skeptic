@@ -211,3 +211,14 @@ test('homepage keeps the pitch compact and routes reference content to the guide
   for (const id of ['install','compare','faq']) assert.match(guide, new RegExp('id="'+id+'"'));
   assert.match(home, /href="guide.html"/);
 });
+
+// Wide screens, 14 Oct: "no matter what computer it's loaded in it fixes itself accordingly."
+// A fixed 1180px column left dead margins either side of anything wider than ~1300px.
+test('the content cap tracks the window instead of stopping at a fixed width', () => {
+  assert.match(css, /--gutter:clamp\(16px,5vw,64px\); --max:1180px;/, 'the base cap is unchanged below 1350px');
+  for (const [bp, cap] of [['1350', '1460px'], ['1850', '1700px'], ['2450', '1900px']]) {
+    assert.ok(css.includes(`@media (min-width:${bp}px) { :root { --max:min(${cap}, calc(100vw - 2 * var(--gutter))); } }`),
+      `above ${bp}px the cap becomes ${cap} or the window minus its gutters`);
+  }
+  assert.match(css, /\.section-head \{ max-width:var\(--max\)/, 'sections read the cap, so every one of them follows');
+});
