@@ -80,7 +80,7 @@ export default function HalftoneWordmarkFooter({
     root.style.setProperty("--hwf-mono", monoFamily)
   }, [height, colors.background, colors.ink, monoFamily])
 
-  // Hold the artwork at the viewport bottom; the page edge clips across it.
+  // Pin the opening artwork below the header while the next section covers it.
   React.useEffect(() => {
     const root = rootRef.current
     if (!root || !scrollReveal) return
@@ -89,7 +89,8 @@ export default function HalftoneWordmarkFooter({
     const update = () => {
       frame = 0
       const rect = root.getBoundingClientRect()
-      const shift = motion.matches ? 0 : Math.min(0, window.innerHeight - (rect.top + rect.height))
+      const headerHeight = document.querySelector(".site-header")?.getBoundingClientRect().height || 0
+      const shift = motion.matches ? 0 : Math.max(0, headerHeight - rect.top)
       root.style.setProperty("--hwf-scroll-shift", shift + "px")
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
