@@ -31,7 +31,7 @@ test('internal links and fragments resolve, IDs are unique per page', () => {
 });
 
 test('local assets exist and nothing loads from another origin', async () => {
-  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+\.(?:css|js|svg|sh))"/g)) await access(`dist/${ref}`);
+  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+\.(?:css|js|svg|sh))(?:\?[^"]*)?"/g)) await access(`dist/${ref}`);
   assert.doesNotMatch(html, /<(?:script|link|img|iframe)\b[^>]*(?:src|href)="https?:/);
   for (const [, href] of html.matchAll(/<a\b[^>]*href="(https?:[^"]+)"/g)) assert.match(href, OUTBOUND, href);
   assert.doesNotMatch(js, /fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|https?:\/\//);
