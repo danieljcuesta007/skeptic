@@ -1,0 +1,6 @@
+/* Utilities only: preserve the existing site's typography and reset. */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../components";
+@source "../landing.tsx";

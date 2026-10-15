@@ -3,16 +3,17 @@ import assert from 'node:assert/strict';
 import { readFile, readdir, access } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 
-const pages = { 'index.html': await readFile('index.html', 'utf8'), 'legal.html': await readFile('legal.html', 'utf8') };
+const pages = { 'index.html': await readFile('dist/index.html', 'utf8'), 'guide.html': await readFile('guide.html', 'utf8'), 'legal.html': await readFile('legal.html', 'utf8') };
 const home = pages['index.html'], legal = pages['legal.html'];
-const html = home + legal;
-const css = await readFile('style.css', 'utf8');
+const guide = pages['guide.html'];
+const html = home + legal + guide;
+const css = await readFile('style.css', 'utf8') + await readFile('dist/landing.css', 'utf8');
 const js = await readFile('site.js', 'utf8');
 const headers = await readFile('_headers', 'utf8');
 const installer = await readFile('install.sh', 'utf8');
 const formula = await readFile('../../Formula/skeptic.rb', 'utf8');
-const SHIPPED = ['index.html', 'legal.html', 'style.css', 'site.js', 'favicon.svg', 'install.sh', '_headers'];
-const OUTBOUND = /^https:\/\/(github\.com\/danieljcuesta007(\/|$)|skeptic\.pages\.dev\/|danielcuesta007\.com$|addisuna\.com$)/;
+const SHIPPED = ['index.html', 'guide.html', 'legal.html', 'style.css', 'site.js', 'favicon.svg', 'install.sh', '_headers', 'landing.js', 'landing.css', 'utilities.css'];
+const OUTBOUND = /^https:\/\/(github\.com\/danieljcuesta007(\/|$)|skeptic\.pages\.dev\/|danielcuesta007\.com$|addisuna\.com$|www\.linkedin\.com\/in\/danielcuesta007\/$)/;
 
 test('internal links and fragments resolve, IDs are unique per page', () => {
   for (const [name, page] of Object.entries(pages)) {
@@ -25,12 +26,12 @@ test('internal links and fragments resolve, IDs are unique per page', () => {
       if (fragment) assert.ok((pages[file || name]).includes(`id="${fragment}"`), `${name}: ${href}`);
     }
   }
-  for (const id of ['how', 'compare', 'install', 'creator', 'faq']) assert.ok(home.includes(`id="${id}"`), id);
+  for (const id of ['how', 'install', 'creator']) assert.ok(home.includes(`id="${id}"`), id);
   for (const id of ['privacy', 'license', 'trademarks', 'credits', 'contact']) assert.ok(legal.includes(`id="${id}"`), id);
 });
 
 test('local assets exist and nothing loads from another origin', async () => {
-  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+\.(?:css|js|svg|sh))"/g)) await access(ref);
+  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+\.(?:css|js|svg|sh))"/g)) await access(`dist/${ref}`);
   assert.doesNotMatch(html, /<(?:script|link|img|iframe)\b[^>]*(?:src|href)="https?:/);
   for (const [, href] of html.matchAll(/<a\b[^>]*href="(https?:[^"]+)"/g)) assert.match(href, OUTBOUND, href);
   assert.doesNotMatch(js, /fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|https?:\/\//);
@@ -65,9 +66,10 @@ test('install tabs are wired both ways', () => {
 });
 
 test('claims stay honest', () => {
-  assert.match(home, /as of October 2026/);
+  assert.match(guide, /as of October 2026/);
   assert.match(home, /illustrative replay/i);
-  assert.match(home, /Built by Daniel Cuesta, with&nbsp;Claude/);
+  assert.match(home, /Daniel Cuesta/);
+  assert.doesNotMatch(home, /with&nbsp;Claude|student founder/);
   for (const page of Object.values(pages)) assert.match(page, /not affiliated with/);
   assert.match(legal, /no telemetry/);
   assert.doesNotMatch(html, /notari[sz]ed|Developer ID|coming soon|award-winning|#1 /i);
@@ -198,7 +200,14 @@ test('build ships exactly the reviewed files, unchanged and free of private data
   assert.deepEqual((await readdir('dist')).sort(), [...SHIPPED].sort());
   for (const file of SHIPPED) {
     const built = await readFile(`dist/${file}`, 'utf8');
-    assert.equal(built, await readFile(file, 'utf8'), file);
+    if (!['index.html', 'landing.js', 'landing.css', 'utilities.css'].includes(file)) assert.equal(built, await readFile(file, 'utf8'), file);
+    if (file === 'index.html') { assert.match(built, /<canvas/); assert.doesNotMatch(built, /HALFTONE_(?:MASTHEAD|FOOTER)/); }
     assert.doesNotMatch(built, /\/Users\/|\/private\/tmp\/|BEGIN (?:RSA |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|@nd\.edu/);
   }
+});
+
+test('homepage keeps the pitch compact and routes reference content to the guide', () => {
+  assert.doesNotMatch(home, /class="(?:trust|compare|faq|install)"/);
+  for (const id of ['install','compare','faq']) assert.match(guide, new RegExp('id="'+id+'"'));
+  assert.match(home, /href="guide.html"/);
 });

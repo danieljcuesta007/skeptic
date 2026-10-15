@@ -1,36 +1,76 @@
 # Skeptic website
 
-The product site at https://skeptic.pages.dev: what Skeptic does, how to install it
-(Homebrew, a one-line script, or from source), an honest comparison, the creator, and
-a privacy/license/trademarks page. Static HTML/CSS with one small script, no
-dependencies, no third-party requests, no cookies or analytics.
+The product landing page at https://skeptic.pages.dev, with a giant interactive
+halftone wordmark, product explanation, install commands, comparison, creator,
+and privacy/license/trademarks page. Black, white and greys; serif product headings
+and mono details retain Skeptic's existing brand. No third-party requests, cookies,
+analytics, image downloads or hosted fonts.
 
-Requires Node 18+ to build and test, Python 3 to preview:
+Requires Node 22+ with npm. React and React DOM are bundled locally; TypeScript,
+esbuild, PostCSS and Tailwind 4 are build dependencies. No Python is needed to
+preview the website. Build output remains static, ready for Cloudflare Pages.
 
-    npm run build             # copies the 7 shipped files to dist/
-    npm test                  # 11 tests: links, CSP, accessibility, palette, honesty, installer
-    node mutation-check.mjs   # plants 13 faults and confirms each is caught
-    npm run preview           # http://127.0.0.1:4173
+```sh
+npm ci
+npm run typecheck
+npm run build
+npm test                    # 22 regressions, including canvas lifecycle
+node mutation-check.mjs      # 27 planted faults, all expected to fail
+npm run preview              # http://127.0.0.1:4173, with production CSP
+```
+
+## Components and styles
+
+`components/ui/halftone-wordmark-footer.tsx` is the supplied reusable React
+component, adapted for Skeptic. `components/ui/demo.tsx` preserves its generic
+demo. Props control wordmark, link columns, height, palette, grain, crop and
+interaction; `as="section"` places the same wordmark in the landing masthead.
+No state store, providers, stock imagery or additional icon package is needed.
+
+The default component path is **`components/ui` within this website package**.
+This is the shadcn convention: reusable UI stays discoverable and generated
+components use the `@/components/ui` alias consistently. `components.json`
+configures shadcn, TypeScript and the neutral Tailwind palette; `tsconfig.json`
+resolves `@/*` from the package root. Shared class helpers live in `lib/utils.ts`.
+To add a shadcn component later, run `npx shadcn@latest add button` here.
+React, TypeScript and Tailwind are already installed; no project recreation is
+needed. For a separate new app, `npx shadcn@latest init` sets up its own project.
+
+Styles: `styles/globals.css` imports Tailwind theme and utilities without its
+reset, preserving the established design. `style.css` remains the site's brand
+stylesheet. Scoped `.hwf-` rules are in
+`components/ui/halftone-wordmark-footer.css`, bundled to `dist/landing.css`.
+The supplied component's inline style block moved here to preserve the existing
+strict self-only CSP. Prop values use CSSOM properties, without allowing inline
+style tags or loosening security headers.
+
+`landing.tsx` supplies real Skeptic links and a monochrome palette. `render.tsx`
+prerenders both wordmarks at build time; `client.tsx` hydrates their canvas effects.
+The page, links and a static wordmark remain visible without JavaScript. At narrow
+widths footer columns become two columns and the install panel stacks below the
+headline. Links and buttons have 44px targets. Animation stops at rest, offscreen
+or in hidden tabs, and respects live changes to reduced-motion preferences.
 
 ## Files
 
-| File | What |
-| --- | --- |
-| `index.html` | The product page |
-| `legal.html` | Privacy, license, trademarks, credits, contact |
-| `style.css` | Brand v1: ink, paper, greys; serif headings, mono labels |
-| `site.js` | Install tabs, copy buttons, the terminal replay |
-| `install.sh` | The one-line installer, served at `/install.sh` as plain text |
-| `_headers` | Cloudflare Pages security headers (strict CSP) |
+- `index.html` / `guide.html` / `legal.html`: compact landing, detailed guide and legal pages.
+- `site.js`: existing install tabs, copy buttons and illustrative terminal replay.
+- `build.mjs`: static prerender, React/CSS bundle and Tailwind compilation.
+- `preview.mjs`: local server with the production security headers.
+- `install.sh`: installer, served as plain text.
+- `_headers`: unchanged Cloudflare Pages CSP and security headers.
 
 `install.sh` and `../../Formula/skeptic.rb` carry the release checksum.
-`scripts/release.sh <version>` fills both in; the tests fail if they disagree.
+`scripts/release.sh <version>` fills both in; tests reject disagreements.
 
 ## Deploy
 
-Cloudflare Pages project `skeptic` (personal account), Direct Upload of `dist/`:
+Cloudflare Pages project `skeptic`, Direct Upload of `dist/`:
 
-    npm run build && npx wrangler pages deploy dist --project-name skeptic
+```sh
+npm run build
+npx wrangler pages deploy dist --project-name skeptic
+```
 
-Deploying is a deliberate step: only after the matching GitHub release exists, so the
-install commands on the page work.
+Deploying is deliberate and separate from local integration; the matching GitHub
+release must exist so the install commands work.
