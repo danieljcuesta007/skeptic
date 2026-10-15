@@ -17,3 +17,7 @@ Full guide: [skeptic-brand-guide.png](skeptic-brand-guide.png).
 - **Terminal:** `skeptic` prints the hood (block characters) above its menu.
 
 The same geometry is drawn in code by the Vitals widget (`SkepticMark` in ai-search-tracker).
+
+15 Oct 2026: Daniel explicitly requested the dotted hood as the website favicon.
+`apps/website/favicon.svg` adapts the display mark to a near-full-size hood on an
+ink squircle; this is an approved exception to the display-only minimum above.
