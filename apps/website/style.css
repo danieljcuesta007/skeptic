@@ -220,3 +220,30 @@ pre.plain { margin:0; padding:16px; background:var(--ink); color:#ededed; border
   .playing .terminal-body li { animation:none; opacity:1; transform:none; }
   .trust-grid li { transition:none; }
 }
+
+/* The halftone masthead leads; product copy and install stay close beneath it. */
+.hero { display:block; min-height:0; padding-top:48px !important; padding-bottom:64px; }
+.hero::before { content:none; }
+.hero-copy { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); column-gap:clamp(28px,5vw,72px); max-width:var(--max); margin:auto; }
+.hero .eyebrow { grid-column:1; margin-bottom:22px; }
+.hero h1 { grid-column:1; font-size:clamp(44px,5.5vw,76px); max-width:13ch; }
+.hero .lede { grid-column:1; font-size:18px; margin:24px 0 0; }
+.hero .installer { grid-column:2; grid-row:1 / span 3; align-self:center; }
+@media (max-width:900px) {
+  .hero-copy { display:block; }
+  .hero .installer { margin-top:32px; }
+}
+
+/* Compact landing rhythm; long reference material lives in the guide. */
+main > section { padding-top:clamp(40px,5vw,64px); padding-bottom:clamp(40px,5vw,64px); }
+.section-head { margin-bottom:28px; }
+.hero { padding-top:32px !important; padding-bottom:40px; }
+.hero .lede { margin-top:18px; }
+h2 { font-size:clamp(32px,4.2vw,52px); max-width:22ch; }
+.terminal-body { min-height:0; padding:20px; line-height:1.65; }
+.steps { gap:24px; }
+.cta { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:24px; }
+.cta h2 { margin:0; }
+.guide-intro { max-width:var(--max); margin:auto; }
+.guide-intro h1 { font-size:clamp(44px,6vw,76px); }
+#install,#how,#creator,#compare,#faq { scroll-margin-top:110px; }

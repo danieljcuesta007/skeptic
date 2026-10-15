@@ -7,6 +7,6 @@ provider/network calls, note writes or automatic preference promotion without sc
 approval. Keep instructions provider-neutral and state capability limits.
 
 Future PRs should include Why / What / Testing / Review notes. Before any merge,
-Claude reviews the PR, findings are addressed or explained, and the review is posted
-as "Review by Claude". Risky/external actions require appropriate approval.
+Claude or Codex reviews the PR, findings are addressed or explained, and the review is posted
+as "Review by Claude" or "Review by Codex", matching the reviewer. Risky/external actions require appropriate approval.
 No remote, PR service, automation or contributor workflow is activated by this file.

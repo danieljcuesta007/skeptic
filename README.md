@@ -50,8 +50,12 @@ No commits, pushes or deployment are performed by the switcher.
 
 ## Requirements and validation
 
-Node 18+ with npm; Python 3.9+; POSIX filesystem descriptor APIs. No third-party
-runtime packages, provider accounts, network calls or installation required.
+Python 3.9+ and POSIX filesystem descriptor APIs for the local tools; no third-party
+Python runtime packages or provider accounts are required for synthetic validation.
+The website build requires Node 22+ with npm and its declared React, TypeScript
+and Tailwind dependencies. Install them once before running full validation:
+
+    npm ci --prefix apps/website
 
     python3 tests/validate.py
 
@@ -83,11 +87,13 @@ Real socket/browser acceptance is pending; [manual checklist](apps/local/BROWSER
 Website:
 
     cd apps/website
+    npm ci
     npm run build
     npm run preview
 
 Open http://127.0.0.1:4173. Stop with Ctrl-C. The demo reads no actual notes and
-connects no accounts. Python preview does not apply Cloudflare response headers.
+connects no accounts. The website preview applies the production Cloudflare
+security headers, including its strict content security policy.
 
 ## Discovery sample
 
