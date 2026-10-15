@@ -85,16 +85,24 @@ export default function HalftoneWordmarkFooter({
     const root = rootRef.current
     if (!root || !scrollReveal) return
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)")
-    let frame = 0
-    const update = () => {
+    let frame = 0, current = 0, last = 0, initialized = false
+    const update = (now: number) => {
       frame = 0
+      if (document.hidden) return
       const rect = root.getBoundingClientRect()
       const headerHeight = document.querySelector(".site-header")?.getBoundingClientRect().height || 0
       const shift = motion.matches ? 0 : Math.max(0, headerHeight - rect.top)
-      root.style.setProperty("--hwf-scroll-shift", shift + "px")
+      const dt = Math.max(1, Math.min(64, now - last || 16))
+      last = now
+      if (!initialized || motion.matches || rect.top + rect.height <= headerHeight) current = shift
+      else current += (shift - current) * (1 - Math.exp(-dt / 85))
+      initialized = true
+      if (Math.abs(shift - current) < 0.1) current = shift
+      root.style.setProperty("--hwf-scroll-shift", current + "px")
+      if (current !== shift) frame = requestAnimationFrame(update)
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
-    update()
+    update(performance.now())
     window.addEventListener("scroll", schedule, { passive: true })
     window.addEventListener("resize", schedule)
     motion.addEventListener("change", schedule)

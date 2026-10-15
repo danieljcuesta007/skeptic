@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 const cases = [
+ ['opening scroll snaps instead of easing', 'opening wordmark stays behind the advancing page, coalesces work and respects reduced motion', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('else current += (shift - current) * (1 - Math.exp(-dt / 85))', 'else current = shift')],
  ['scroll reveal ignores reduced motion', 'opening wordmark stays behind the advancing page, coalesces work and respects reduced motion', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('const shift = motion.matches ? 0 :', 'const shift = false ? 0 :')],
  ['scroll reveal moves in reverse', 'opening wordmark stays behind the advancing page, coalesces work and respects reduced motion', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('Math.max(0, headerHeight - rect.top)', 'Math.min(0, rect.top - headerHeight)')],
  ['descender clipped again', 'negative crop lifts the baseline so lowercase descenders remain visible', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('Math.max(-0.4, Math.min(0.6, o.crop))', 'Math.max(0, Math.min(0.6, o.crop))')],
