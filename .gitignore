@@ -18,3 +18,5 @@ credentials.json
 *.key
 .skeptic-cache/
 .skeptic-local/
+
+apps/website/.build/

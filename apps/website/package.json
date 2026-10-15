@@ -1,1 +1,27 @@
-{"name":"skeptic-website-v1","version":"0.1.0","private":true,"type":"module","scripts":{"build":"node build.mjs","test":"node --test test.mjs","preview":"python3 -m http.server 4173 --bind 127.0.0.1 --directory dist"}}
+{
+  "name": "skeptic-website-v1",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test.mjs halftone.test.mjs",
+    "preview": "node preview.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.28.2",
+    "postcss": "^8.5.30",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2"
+  }
+}

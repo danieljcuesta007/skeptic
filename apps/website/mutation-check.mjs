@@ -1,10 +1,12 @@
 // Plant one fault per case in a scratch copy and confirm the named test rejects it.
-import { mkdtemp, cp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, cp, readFile, writeFile, rm, mkdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 const cases = [
- ['broken fragment link', 'internal links and fragments resolve, IDs are unique per page', 'index.html', s => s.replace('href="#compare"', 'href="#nowhere"')],
+ ['descender clipped again', 'negative crop lifts the baseline so lowercase descenders remain visible', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('Math.max(-0.4, Math.min(0.6, o.crop))', 'Math.max(0, Math.min(0.6, o.crop))')],
+ ['homepage reference sections return', 'homepage keeps the pitch compact and routes reference content to the guide', 'index.html', s => s.replace('</main>', '<section class="faq"></section></main>')],
+ ['broken fragment link', 'internal links and fragments resolve, IDs are unique per page', 'index.html', s => s.replace('href="guide.html#compare"', 'href="#nowhere"')],
  ['third-party tracker', 'local assets exist and nothing loads from another origin', 'index.html', s => s.replace('</head>', '<script src="https://analytics.example/t.js"></script></head>')],
  ['link to an unknown site', 'local assets exist and nothing loads from another origin', 'legal.html', s => s.replace('https://github.com/danieljcuesta007/skeptic/issues', 'https://example.com/issues')],
  ['inline style blocked by CSP', 'markup works under the strict content security policy', 'index.html', s => s.replace('<h1 id="hero-title">', '<h1 id="hero-title" style="color:#fff">')],
@@ -12,7 +14,7 @@ const cases = [
  ['second h1', 'each page has one h1, a skip link and labelled navigation', 'legal.html', s => s.replace('</main>', '<h1>Again</h1></main>')],
  ['tab without panel', 'install tabs are wired both ways', 'index.html', s => s.replace('aria-labelledby="t-curl"', 'aria-labelledby="t-none"')],
  ['affiliation note dropped', 'claims stay honest', 'legal.html', s => s.replace('is not affiliated with', 'works with')],
- ['comparison undated', 'claims stay honest', 'index.html', s => s.replace('as of October 2026', 'today')],
+ ['comparison undated', 'claims stay honest', 'guide.html', s => s.replace('as of October 2026', 'today')],
  ['brand colour creeps in', 'palette is monochrome', 'style.css', s => s.replace('--grey:#8c8c8c', '--grey:#3f8a4f')],
  ['unpack before checksum', 'installer verifies the download before unpacking and never escalates', 'install.sh', s => s.replace('mkdir -p "$PREFIX/$VERSION"\ntar -xzf', 'tar -xzf').replace('curl -fsSL "$URL" -o "$tmp/skeptic.tar.gz" || die "download failed: $URL"', 'curl -fsSL "$URL" -o "$tmp/skeptic.tar.gz" || die "download failed: $URL"\nmkdir -p "$PREFIX/$VERSION"\ntar -xzf "$tmp/skeptic.tar.gz" -C "$PREFIX/$VERSION" --strip-components 1')],
  ['formula out of step', 'install script and Homebrew formula point at the same release', '../../Formula/skeptic.rb', s => s.replace('v0.1.0/skeptic-0.1.0', 'v0.0.9/skeptic-0.0.9')],
@@ -25,6 +27,11 @@ const cases = [
  ['stale status never cleared', 'two copy buttons share the status line without wiping each other', 'site.js', s => s.replace("if (copyTurn.n === turn) status.textContent = '';", '')],
  ['ownership by matching text', 'two copy buttons share the status line without wiping each other', 'site.js', s => s.replace('const turn = ++copyTurn.n;', 'const turn = ++copyTurn.n; const mine = status.textContent;').replace("if (copyTurn.n === turn) status.textContent = '';", "if (status.textContent === mine) status.textContent = '';")],
  ['arrow keys ignored', 'site.js: tabs switch by click and arrow keys; copy writes the command', 'site.js', s => s.replace("e.key === 'ArrowRight' ? 1", "e.key === 'Nope' ? 1")],
+ ['dot tone loses area coverage', 'dot coverage preserves area and clamps empty/full cells', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('Math.sqrt(c) * gap', 'c * gap')],
+ ['reduced motion reacts to pointer', 'canvas sleeps at rest, ignores reduced-motion input, and releases listeners on unmount', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('!opts.current.interactive || reduced || e.pointerType', '!opts.current.interactive || e.pointerType')],
+ ['canvas never sleeps', 'canvas sleeps at rest, ignores reduced-motion input, and releases listeners on unmount', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('awake = !reduced && (moving', 'awake = true || !reduced && (moving')],
+ ['observer cleanup lost', 'canvas sleeps at rest, ignores reduced-motion input, and releases listeners on unmount', 'components/ui/halftone-wordmark-footer.tsx', s => s.replace('ro.disconnect(); io.disconnect()', 'ro.disconnect()')],
+
 ];
 for (const [name, expected, file, mutate] of cases) {
   const scratch = await mkdtemp(join(tmpdir(), 'skeptic-site-'));
@@ -33,11 +40,12 @@ for (const [name, expected, file, mutate] of cases) {
     await mkdir(site, { recursive: true });
     await cp(new URL('.', import.meta.url), site, { recursive: true, filter: src => !src.split('/').includes('dist') && !src.split('/').includes('node_modules') });
     await cp(new URL('../../Formula', import.meta.url), join(scratch, 'Formula'), { recursive: true });
+    await symlink(new URL('node_modules', import.meta.url).pathname, join(site, 'node_modules'));
     const target = join(site, file), before = await readFile(target, 'utf8'), after = mutate(before);
     if (after === before) throw Error(`Fault not planted: ${name}`);
     await writeFile(target, after);
     if (spawnSync(process.execPath, ['build.mjs'], { cwd: site }).status !== 0) throw Error(`Scratch build failed: ${name}`);
-    const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'test.mjs'], { cwd: site, encoding: 'utf8' });
+    const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'test.mjs', 'halftone.test.mjs'], { cwd: site, encoding: 'utf8' });
     if (result.status === 0 || !result.stdout.split('\n').some(l => l.startsWith('not ok ') && l.endsWith(expected))) throw Error(`Not caught: ${name}`);
     console.log(`Caught: ${name}`);
   } finally { await rm(scratch, { recursive: true, force: true }); }

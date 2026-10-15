@@ -11,6 +11,9 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 <script src="site.js" defer></script>
+<link rel="stylesheet" href="landing.css">
+<link rel="stylesheet" href="utilities.css">
+<script src="landing.js" type="module"></script>
 </head>
 <body>
 <svg class="sprite" aria-hidden="true" focusable="false"><defs>
@@ -30,20 +33,21 @@
   </a>
   <nav aria-label="Main navigation">
     <a href="#how">How it works</a>
-    <a href="#compare">Compare</a>
+    <a href="guide.html#compare">Guide</a>
     <a href="#creator">Creator</a>
     <a class="nav-install" href="#install">Install</a>
   </nav>
 </header>
 
 <main id="main" tabindex="-1">
+<div id="landing-masthead" class="w-full"><!-- HALFTONE_MASTHEAD --></div>
 
 <section class="hero" aria-labelledby="hero-title">
   <div class="hero-copy">
     <p class="eyebrow"><span>A DC Labs product</span><span>v0.1</span><span>Free &amp; open source</span></p>
     <h1 id="hero-title">Your work. Your memory. <em>Any&nbsp;AI.</em></h1>
     <p class="lede">When Claude hits its limit halfway through a task, Skeptic hands that same session to Codex or Hermes, and it carries on from where you stopped. No copy-paste. No re-explaining. No starting over.</p>
-    <div class="installer" data-tabs>
+    <div class="installer" id="install" data-tabs>
       <div class="tab-row" role="tablist" aria-label="Install method">
         <button type="button" role="tab" id="t-brew" aria-controls="p-brew" aria-selected="true">Homebrew</button>
         <button type="button" role="tab" id="t-curl" aria-controls="p-curl" aria-selected="false" tabindex="-1">One line</button>
@@ -66,15 +70,7 @@
       <p class="installer-note">macOS · Python 3.9+ · no admin rights · <a href="install.sh">read the install script</a></p>
     </div>
   </div>
-  <figure class="hero-mark" aria-hidden="true">
-    <svg viewBox="0 0 100 100" focusable="false">
-      <g clip-path="url(#hood-clip)">
-        <rect width="100" height="100" fill="url(#dots)" mask="url(#fade-mask)"/>
-        <rect class="scan" x="0" y="0" width="100" height="6" fill="#fff"/>
-      </g>
-    </svg>
-    <figcaption>Not everything is black and white.</figcaption>
-  </figure>
+
 </section>
 
 <section class="replay" aria-labelledby="replay-title">
@@ -116,131 +112,38 @@
   </ul>
 </section>
 
-<section class="trust" aria-labelledby="trust-title">
-  <div class="section-head">
-    <p class="kicker">03 / Built to be trusted</p>
-    <h2 id="trust-title">Skeptical by name. Careful by design.</h2>
-  </div>
-  <ul class="trust-grid">
-    <li><h3>Reads only what you approve</h3><p>The first switch in a project asks you to type <code>approve</code>. Take it back any time with <code>skeptic permissions revoke</code>.</p></li>
-    <li><h3>Runs on your Mac</h3><p>No account, no server, no telemetry. Skeptic makes no network calls. The engines you switch to use their own sign-ins.</p></li>
-    <li><h3>Never ships for you</h3><p>No commits, pushes or deploys. It hands over the work and stops. What happens next is your call.</p></li>
-    <li><h3>Says what it can't see</h3><p>Unsaved work and hidden reasoning can't be recovered, and Skeptic says so in the handoff instead of guessing.</p></li>
-    <li><h3>Open source</h3><p>MIT licensed. Read every line, including the <a href="install.sh">install script</a>, before you run it.</p></li>
-    <li><h3>Proven on a real switch</h3><p>On 12 October 2026 a live Claude session out of quota was handed to Codex, which carried on correctly.</p></li>
-  </ul>
-</section>
 
-<section class="compare" id="compare" aria-labelledby="compare-title">
-  <div class="section-head">
-    <p class="kicker">04 / What you're choosing between</p>
-    <h2 id="compare-title">The other ways to keep going</h2>
-    <p class="section-lede">When your AI runs out mid-task, these are the realistic options. An honest look, as of October 2026.</p>
-  </div>
-  <div class="table-wrap" tabindex="0" role="region" aria-labelledby="compare-title">
-    <table>
-      <thead><tr><th scope="col"><span class="visually-hidden">Feature</span></th><th scope="col" class="us">Skeptic</th><th scope="col">Summarise it by hand</th><th scope="col">Start a fresh chat</th><th scope="col">Wait for the reset</th></tr></thead>
-      <tbody>
-        <tr><th scope="row">Keep working right now</th><td class="us">Yes</td><td>Yes</td><td>Yes</td><td>No, hours later</td></tr>
-        <tr><th scope="row">New engine knows your last request</th><td class="us">Yes</td><td>If you remember it</td><td>No</td><td>Yes</td></tr>
-        <tr><th scope="row">Knows which files changed</th><td class="us">Yes</td><td>If you list them</td><td>No</td><td>Yes</td></tr>
-        <tr><th scope="row">Switch to another provider</th><td class="us">Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
-        <tr><th scope="row">Effort from you</th><td class="us">One command</td><td>Minutes of writing</td><td>Re-explain everything</td><td>None, but you wait</td></tr>
-        <tr><th scope="row">Original session kept</th><td class="us">Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-        <tr><th scope="row">Cost</th><td class="us">Free</td><td>Free</td><td>Free</td><td>Free, or a bigger plan</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="caption">Where waiting wins: if you don't need to keep going tonight, the original session resumes with everything it had. Skeptic is for when you do.</p>
-</section>
 
-<section class="install" id="install" aria-labelledby="install-title">
-  <div class="section-head">
-    <p class="kicker">05 / Install</p>
-    <h2 id="install-title">Two minutes, no admin rights</h2>
-  </div>
-  <div class="install-grid">
-    <div>
-      <h3>You need</h3>
-      <ul class="checklist">
-        <li>A Mac (Linux should work but is untested)</li>
-        <li>Python 3.9 or newer and Git (<code>xcode-select --install</code> gives you both)</li>
-        <li>At least one engine to switch to: Codex, Hermes or Claude Code, signed in</li>
-      </ul>
-      <h3>Then</h3>
-      <ol class="checklist">
-        <li>Install with one of the commands above.</li>
-        <li>Open a new Terminal window.</li>
-        <li>When Claude stops, press <kbd>Ctrl</kbd>+<kbd>Z</kbd> and run <code>skeptic</code>.</li>
-      </ol>
-    </div>
-    <div>
-      <h3>Safe by construction</h3>
-      <ul class="checklist">
-        <li>The one-line installer checks the download's SHA-256 checksum and stops if it doesn't match.</li>
-        <li>Everything stays in your home folder: the app in <code>~/.local/share/skeptic</code>, the command in <code>~/.local/bin</code>, one marked line in <code>~/.zshrc</code>, and the <code>/skeptic</code> helpers for Claude Code and Codex.</li>
-        <li>It only replaces files it put there itself. If you've changed one, it stops and tells you which.</li>
-      </ul>
-      <h3>Remove it</h3>
-      <pre class="plain"><code>brew uninstall skeptic        # Homebrew
-rm -rf ~/.local/share/skeptic ~/.local/bin/skeptic   # one-line install
-rm -rf ~/.claude/skills/skeptic ~/.agents/skills/skeptic ~/.skeptic-cli</code></pre>
-      <p class="small-note">Last, delete the two lines under <code># Skeptic terminal PATH</code> in <code>~/.zshrc</code> if they're there.</p>
-    </div>
-  </div>
-</section>
+
+
+
 
 <section class="creator" id="creator" aria-labelledby="creator-title">
   <div class="creator-card">
     <div class="monogram" aria-hidden="true">DC</div>
     <div>
-      <p class="kicker">06 / About the creator</p>
-      <h2 id="creator-title">Built by Daniel Cuesta, with&nbsp;Claude.</h2>
-      <p>Daniel is a student founder who runs a lot at once: Addisuna Coffee, a coffee company where every bag funds a student's learning in Ethiopia, and Wednesdays of Wisdom, a weekly letter. He builds his own tools to keep it all moving, under one label: DC Labs.</p>
-      <p>Skeptic exists because of one specific, repeated moment: being deep in a task when the AI ran out. He built the way out, and now it's yours too.</p>
+      <p class="kicker">03 / About the creator</p>
+      <h2 id="creator-title">Daniel Cuesta.</h2>
+      <p>Author of <strong>Wednesdays Of Wisdom</strong>, a weekly newsletter focused on timeless principles for daily action. Co-founder of <strong>Addisuna Coffee Co.</strong>, an Ethiopian specialty coffee company sponsoring children's education in Ethiopia.</p>
+      <p>University of Notre Dame alumnus. Currently operating and building out of New York, New York. Growing the good in business with IBM Consulting.</p>
       <ul class="creator-links">
         <li><a href="https://danielcuesta007.com" rel="noopener">danielcuesta007.com</a></li>
         <li><a href="https://addisuna.com" rel="noopener">Addisuna Coffee</a></li>
+        <li><a href="https://www.linkedin.com/in/danielcuesta007/" rel="noopener">LinkedIn</a></li>
         <li><a href="https://github.com/danieljcuesta007" rel="noopener">GitHub</a></li>
       </ul>
     </div>
   </div>
 </section>
 
-<section class="faq" id="faq" aria-labelledby="faq-title">
-  <div class="section-head">
-    <p class="kicker">07 / Questions</p>
-    <h2 id="faq-title">Fair questions</h2>
-  </div>
-  <details><summary>Is it really free?</summary><p>Yes. Skeptic is open source under the MIT license. You only pay for the AI engines you already use.</p></details>
-  <details><summary>Does Skeptic read my conversations?</summary><p>Only the session you choose to switch, and only after you approve it. It reads the requests and progress in that session's local transcript, never hidden reasoning, and nothing leaves your Mac except the handoff you give the next engine.</p></details>
-  <details><summary>What happens to my Claude session?</summary><p>Nothing. It stays open and intact. Switch back when your limit resets.</p></details>
-  <details><summary>Does it need Codex?</summary><p>It needs at least one other engine to hand over to. Codex, Hermes and Claude Code all work, and local models run through Codex.</p></details>
-  <details><summary>Is it affiliated with Anthropic, OpenAI or Nous Research?</summary><p>No. Skeptic is an independent project that works with their tools. Their names belong to them.</p></details>
-</section>
 
-<section class="cta" aria-labelledby="cta-title">
-  <svg class="cta-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><use href="#hood-path" fill="currentColor"/></svg>
-  <h2 id="cta-title">Don't lose the thread.</h2>
-  <a class="button" href="#install">Install Skeptic</a>
-</section>
+
+<section class="cta" aria-labelledby="cta-title"><h2 id="cta-title">Keep the thread.</h2><a class="button" href="#install">Install Skeptic</a><a href="guide.html">Setup, privacy &amp; questions →</a></section>
 
 <p class="visually-hidden" role="status" data-copy-status></p>
 </main>
 
-<footer class="site-footer">
-  <div class="footer-brand">
-    <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><use href="#hood-path" fill="currentColor"/></svg>
-    <p><strong>Skeptic</strong><br>A DC Labs product</p>
-  </div>
-  <nav aria-label="Footer">
-    <a href="legal.html#privacy">Privacy</a>
-    <a href="legal.html#license">License</a>
-    <a href="legal.html#trademarks">Trademarks</a>
-    <a href="install.sh">Install script</a>
-    <a href="https://github.com/danieljcuesta007/skeptic" rel="noopener">Source</a>
-  </nav>
-  <p class="fineprint">© 2026 Daniel Cuesta. MIT licensed. Claude and Claude Code are trademarks of Anthropic; Codex of OpenAI; Hermes of Nous Research. Skeptic is not affiliated with or endorsed by them.</p>
-</footer>
+<div id="landing-footer" class="w-full"><!-- HALFTONE_FOOTER --></div>
+  <p class="halftone-disclaimer">© 2026 Daniel Cuesta. MIT licensed. Claude and Claude Code are trademarks of Anthropic; Codex of OpenAI; Hermes of Nous Research. Skeptic is not affiliated with or endorsed by them.</p>
 </body>
 </html>
