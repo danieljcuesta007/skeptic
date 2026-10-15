@@ -27,6 +27,6 @@
 }
 @media (prefers-reduced-motion:reduce) { .hwf-col a,.hwf-up { transition:none; } }
 
-.skeptic-footer canvas { transform:translateY(var(--hwf-scroll-shift,0px)); }
+.skeptic-footer canvas,.skeptic-footer .hwf-top,.skeptic-footer .hwf-rule { transform:translateY(var(--hwf-scroll-shift,0px)); }
 .skeptic-footer .hwf-fallback { transform:translate(-50%,var(--hwf-scroll-shift,0px)); }
-@media (prefers-reduced-motion:reduce) { .skeptic-footer canvas { transform:none; } .skeptic-footer .hwf-fallback { transform:translateX(-50%); } }
+@media (prefers-reduced-motion:reduce) { .skeptic-footer canvas,.skeptic-footer .hwf-top,.skeptic-footer .hwf-rule { transform:none; } .skeptic-footer .hwf-fallback { transform:translateX(-50%); } }

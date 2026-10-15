@@ -80,7 +80,7 @@ export default function HalftoneWordmarkFooter({
     root.style.setProperty("--hwf-mono", monoFamily)
   }, [height, colors.background, colors.ink, monoFamily])
 
-  // The footer wordmark rises out of its clipped lower edge as the footer enters.
+  // Hold the artwork at the viewport bottom; the page edge clips across it.
   React.useEffect(() => {
     const root = rootRef.current
     if (!root || !scrollReveal) return
@@ -89,8 +89,7 @@ export default function HalftoneWordmarkFooter({
     const update = () => {
       frame = 0
       const rect = root.getBoundingClientRect()
-      const progress = Math.max(0, Math.min(1, (window.innerHeight - rect.top) / Math.max(1, rect.height)))
-      const shift = motion.matches ? 0 : (1 - progress) * Math.min(rect.width * 0.3, rect.height * 0.8)
+      const shift = motion.matches ? 0 : Math.min(0, window.innerHeight - (rect.top + rect.height))
       root.style.setProperty("--hwf-scroll-shift", shift + "px")
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
