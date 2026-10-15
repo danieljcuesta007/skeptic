@@ -9,7 +9,7 @@ export interface FooterLink { label: string; href?: string }
 export interface FooterColumn { title: string; links: FooterLink[] }
 export interface HalftoneWordmarkFooterProps {
   wordmark?: string; label?: string; meta?: string; columns?: FooterColumn[];
-  backToTop?: boolean; preset?: HalftonePreset; palette?: Partial<HalftonePalette>;
+  scrollReveal?: boolean; backToTop?: boolean; preset?: HalftonePreset; palette?: Partial<HalftonePalette>;
   dotGap?: number; radius?: number; crop?: number; grain?: number; interactive?: boolean;
   fontFamily?: string; fontWeight?: number; monoFamily?: string; height?: string; className?: string;
   /** Use a section when the wordmark introduces a page. The default is a footer. */
@@ -59,7 +59,7 @@ export function hwfFitSize(measured: number, width: number) {
 
 export default function HalftoneWordmarkFooter({
   wordmark = "halden", label = "Halden Studio", meta = "©2026 · Oslo / Lisbon", columns = DEFAULT_COLUMNS,
-  backToTop = true, preset = "night", palette, dotGap = 6, radius = 80, crop = 0.2, grain = 0.5,
+  scrollReveal = false, backToTop = true, preset = "night", palette, dotGap = 6, radius = 80, crop = 0.2, grain = 0.5,
   interactive = true, fontFamily = SANS_STACK, fontWeight = 800, monoFamily = MONO_STACK,
   height = "560px", className = "", as: Tag = "footer",
 }: HalftoneWordmarkFooterProps) {
@@ -79,6 +79,33 @@ export default function HalftoneWordmarkFooter({
     root.style.setProperty("--hwf-ink", colors.ink)
     root.style.setProperty("--hwf-mono", monoFamily)
   }, [height, colors.background, colors.ink, monoFamily])
+
+  // The footer wordmark rises out of its clipped lower edge as the footer enters.
+  React.useEffect(() => {
+    const root = rootRef.current
+    if (!root || !scrollReveal) return
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)")
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const rect = root.getBoundingClientRect()
+      const progress = Math.max(0, Math.min(1, (window.innerHeight - rect.top) / Math.max(1, rect.height)))
+      const shift = motion.matches ? 0 : (1 - progress) * Math.min(rect.width * 0.3, rect.height * 0.8)
+      root.style.setProperty("--hwf-scroll-shift", shift + "px")
+    }
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
+    update()
+    window.addEventListener("scroll", schedule, { passive: true })
+    window.addEventListener("resize", schedule)
+    motion.addEventListener("change", schedule)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener("scroll", schedule)
+      window.removeEventListener("resize", schedule)
+      motion.removeEventListener("change", schedule)
+      root.style.removeProperty("--hwf-scroll-shift")
+    }
+  }, [scrollReveal])
 
   React.useEffect(() => {
     const root = rootRef.current, canvas = canvasRef.current

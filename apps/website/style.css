@@ -247,3 +247,32 @@ h2 { font-size:clamp(32px,4.2vw,52px); max-width:22ch; }
 .guide-intro { max-width:var(--max); margin:auto; }
 .guide-intro h1 { font-size:clamp(44px,6vw,76px); }
 #install,#how,#creator,#compare,#faq { scroll-margin-top:110px; }
+
+/* The navigation belongs to the same ink-and-halftone identity as the masthead. */
+.site-header {
+  background:#0b0b0b;
+  background-image:radial-gradient(circle,rgba(255,255,255,.055) .7px,transparent .9px);
+  background-size:5px 5px;
+  border-bottom:1px solid #393939;
+  padding-top:12px; padding-bottom:12px;
+}
+.site-header .brand { gap:14px; font:800 32px/.95 "Helvetica Neue",Arial,sans-serif; letter-spacing:-.055em; }
+.site-header .brand > span { text-transform:lowercase; }
+.site-header .brand-mark { width:30px; height:30px; }
+@supports ((background-clip:text) or (-webkit-background-clip:text)) {
+  .site-header .brand > span {
+    background-image:radial-gradient(circle,#f7f7f7 1px,transparent 1.15px);
+    background-size:2.6px 2.6px;
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+}
+.site-header nav { gap:clamp(16px,2.5vw,36px); font-size:10px; letter-spacing:.18em; }
+.site-header nav a:not(.nav-install) { position:relative; }
+.site-header nav a:not(.nav-install)::after { content:""; position:absolute; bottom:5px; left:0; width:0; height:1px; background:currentColor; transition:width .2s; }
+.site-header nav a:hover::after,.site-header nav a:focus-visible::after { width:100%; }
+.site-header .nav-install { border:1px solid #737373; border-radius:0; background:transparent; color:#f7f7f7; padding:10px 18px; gap:16px; }
+.site-header .nav-install::after { content:"↗"; font-size:16px; }
+.site-header .nav-install:hover { background:#f7f7f7; color:#0b0b0b; }
+@media (max-width:560px) { .site-header .brand { font-size:28px; } .site-header nav { gap:12px; } }
+@media (prefers-reduced-motion:reduce) { .site-header nav a::after { transition:none; } }
+@media (forced-colors:active) { .site-header .brand > span { color:LinkText; background:none; } }
