@@ -15,7 +15,7 @@ npm ci
 npm run typecheck
 npm run build
 npm test                    # 24 regressions, including canvas lifecycle
-node mutation-check.mjs      # 29 planted faults, all expected to fail
+node mutation-check.mjs      # 30 planted faults, all expected to fail
 npm run preview              # http://127.0.0.1:4173, with production CSP
 ```
 
@@ -77,6 +77,7 @@ release must exist so the install commands work.
 
 The opening masthead opts into `scrollReveal`: its artwork stays pinned below the
 sticky header as the following page section slides over it from below. The footer
-is static with its light crop. Updates coalesce into one animation frame; reduced
+is static with its light crop. Artwork follows scroll with a short frame-rate-independent easing and a softly
+feathered page edge. Updates settle and stop rather than running continuously; reduced
 motion disables pinning, and listeners/frames clean up on unmount. The dotted hood
 favicon and matching halftone header remain in place.
