@@ -72,6 +72,10 @@ test('claims stay honest', () => {
   assert.doesNotMatch(home, /with&nbsp;Claude|student founder/);
   // 29 Oct: credit DC Labs, never "with Claude", on every page.
   assert.doesNotMatch(html, /with(&nbsp;|\s)Claude\b(?! Code)/);
+  // One credit line for every DC Labs product (29 Oct).
+  for (const page of [home, legal]) assert.match(page, /Built by DC Labs, a Daniel J\. Cuesta company/);
+  assert.match(home, /<h2 id="creator-title">Built by DC Labs, a Daniel J\. Cuesta company\.<\/h2>/, 'the about section leads with it');
+  assert.match(home, /© 2026 · Built by DC Labs, a Daniel J\. Cuesta company/, 'and the footer carries it');
   for (const page of Object.values(pages)) assert.match(page, /not affiliated with/);
   assert.match(legal, /no telemetry/);
   assert.doesNotMatch(html, /notari[sz]ed|Developer ID|coming soon|award-winning|#1 /i);
