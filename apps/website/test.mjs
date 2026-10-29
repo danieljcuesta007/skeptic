@@ -70,6 +70,8 @@ test('claims stay honest', () => {
   assert.match(home, /illustrative replay/i);
   assert.match(home, /Daniel Cuesta/);
   assert.doesNotMatch(home, /with&nbsp;Claude|student founder/);
+  // 29 Oct: credit DC Labs, never "with Claude", on every page.
+  assert.doesNotMatch(html, /with(&nbsp;|\s)Claude\b(?! Code)/);
   for (const page of Object.values(pages)) assert.match(page, /not affiliated with/);
   assert.match(legal, /no telemetry/);
   assert.doesNotMatch(html, /notari[sz]ed|Developer ID|coming soon|award-winning|#1 /i);
