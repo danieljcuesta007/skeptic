@@ -136,3 +136,7 @@ engine. No new live hooks, login services or provider integrations are activated
 [Portable continuity contract](skills/skeptic/references/continuity-contract.md).
 Run the socket-independent validator as documented; full managed runtime acceptance
 requires Unix sockets. Offline adapter tests do not establish real provider acceptance.
+
+---
+
+Built by DC Labs, a Daniel J. Cuesta company.

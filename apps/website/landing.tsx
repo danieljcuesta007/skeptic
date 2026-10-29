@@ -9,7 +9,7 @@ export function Masthead() {
     columns={[{ title: "Start here", links: [{ label: "Install Skeptic ↗", href: "#install" }] }]} />
 }
 export function LandingFooter() {
-  return <HalftoneWordmarkFooter wordmark="skeptic" label="Skeptic / DC Labs" meta="© 2026 · Built by Daniel Cuesta"
+  return <HalftoneWordmarkFooter wordmark="skeptic" label="Skeptic / DC Labs" meta="© 2026 · Built by DC Labs, a Daniel J. Cuesta company"
     palette={brand} fontWeight={800} crop={-0.1} dotGap={5} height="clamp(560px,43vw,680px)" className="skeptic-footer"
     columns={[
       { title: "Product", links: [{ label: "How it works", href: "#how" }, { label: "Compare", href: "guide.html#compare" }, { label: "Install", href: "#install" }] },
